@@ -1,0 +1,100 @@
+body {
+  font-family: sans-serif;
+  font-size: 20px;
+  border: 0;
+}
+
+form input {
+  font-size: 85%;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+}
+
+button {
+  background-color: #1FADC5;
+  border: 1px solid rgba(0,0,0,.2);
+  font-size: 75%;
+  color: #fff;
+  padding: .4em 1.2em;
+  border-radius: 2em;
+  cursor: pointer;
+  margin: 0 .23em;
+  outline: none;
+}
+
+.disabled {
+  background-color: #ccc;
+}
+
+label {
+  cursor: pointer;
+}
+
+.input-name, .input-description, .input-mention_to, .input-pattern, .input-endpoint {
+  width: 500px;
+  border-radius: 0.2em;
+}
+
+table{
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: 100%;
+}
+
+table tr{
+  border-bottom: solid 1px #eee;
+  cursor: pointer;
+}
+
+table tr:hover{
+  background-color: #d4f0fd;
+}
+
+table th, table td{
+  text-align: center;
+  width: 20%;
+  padding: 15px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 99999998;
+  background-color: rgba(0,0,0,.2);
+}
+
+.dialog {
+  width: 500px;
+  margin: 50px auto;
+  background-color: white;
+  padding: 20px;
+  border-radius: 0.5em;
+}
+
+.message-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 99999999;
+  background-color: rgba(0,0,0,.2);
+}
+
+.message {
+  width: 300px;
+  margin: 50px auto;
+  background-color: white;
+  padding: 20px;
+  border-radius: 0.5em;
+}
+
+.message p {
+  text-align: center;
+}

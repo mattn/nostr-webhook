@@ -1,0 +1,30 @@
+<!doctype html>
+
+<html>
+  <head>
+    <title>Webhooks</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link rel="stylesheet" href="app.css">
+  </head>
+
+  <body>
+
+    <entry></entry>
+    <modal></modal>
+    <message></message>
+
+    <script src="entry.riot" type="riot"></script>
+    <script src="modal.riot" type="riot"></script>
+    <script src="message.riot" type="riot"></script>
+    <script src="/riot+compiler.min.js"></script>
+
+    <script>
+      riot.compile().then(async () => {
+        riot.mount('entry', {
+          title: 'webhooks',
+          items: [],
+        }, 'entry')
+      })
+    </script>
+  </body>
+</html>

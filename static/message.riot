@@ -1,0 +1,30 @@
+<message>
+  <div class="message-screen" show={dialogShowing} onclick={closeDialog}>
+    <div class="message">
+      <p>{ state.message }</p>
+      <button onclick={ ok }>OK</button>
+      <button onclick={ cancel }>Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          message: props.message,
+          onOK: props.onOK,
+        }
+      },
+      cancel(e) {
+        e.preventDefault()
+        this.unmount('message', true)
+      },
+      ok(e) {
+        e.preventDefault()
+        this.unmount('message', true)
+        this.state.onOK();
+      }
+    }
+  </script>
+</message>
+
