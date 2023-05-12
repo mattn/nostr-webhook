@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sync"
@@ -71,7 +72,7 @@ type Task struct {
 	Name        string    `bun:"name,notnull" json:"name"`
 	Description string    `bun:"description,notnull" json:"description"`
 	Author      string    `bun:"author,notnull" json:"author"`
-	Spec        string    `bun:"cronspec,notnull" json:"spec"`
+	Spec        string    `bun:"spec,notnull" json:"spec"`
 	Endpoint    string    `bun:"endpoint,notnull" json:"endpoint"`
 	Secret      string    `bun:"secret,notnull,default:random_string(12)" json:"secret"`
 	Enabled     bool      `bun:"enabled,notnull,default:false" json:"enabled"`
@@ -81,10 +82,10 @@ type Task struct {
 }
 
 var (
-	entriesMu sync.Mutex
-	hooks     = []Hook{}
-	cronsMu   sync.Mutex
-	crons     = []Task{}
+	hooksMu sync.Mutex
+	hooks   = []Hook{}
+	tasksMu sync.Mutex
+	tasks   = []Task{}
 
 	jobs = cron.New()
 )
@@ -95,8 +96,8 @@ func doEntries(ev *nostr.Event) {
 		log.Println(err)
 		return
 	}
-	entriesMu.Lock()
-	defer entriesMu.Unlock()
+	hooksMu.Lock()
+	defer hooksMu.Unlock()
 	for _, entry := range hooks {
 		if !entry.Enabled {
 			continue
@@ -161,19 +162,19 @@ func doEntries(ev *nostr.Event) {
 }
 
 func reloadTasks(bundb *bun.DB) {
-	var cc []Task
-	err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &cc)
+	var ee []Task
+	err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &ee)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	jobs.Stop()
-	for _, cr := range crons {
+	<-jobs.Stop().Done()
+	for _, cr := range tasks {
 		jobs.Remove(cr.id)
 	}
-	for i := range cc {
-		ct := cc[i]
+	for i := range ee {
+		ct := ee[i]
 		id, err := jobs.AddFunc(ct.Spec, func() {
 			log.Printf("%v: Start", ct.Name)
 			req, err := http.NewRequest(http.MethodGet, ct.Endpoint, nil)
@@ -217,14 +218,14 @@ func reloadTasks(bundb *bun.DB) {
 			log.Printf("%v: Failed to add task: %v", ct.Name, err)
 			continue
 		}
-		cc[i].id = id
+		ee[i].id = id
 	}
 	jobs.Start()
 
-	cronsMu.Lock()
-	defer cronsMu.Unlock()
-	crons = cc
-	log.Printf("Reloaded %d crons", len(cc))
+	tasksMu.Lock()
+	defer tasksMu.Unlock()
+	tasks = ee
+	log.Printf("Reloaded %d tasks", len(ee))
 }
 
 func reloadHooks(bundb *bun.DB) {
@@ -250,8 +251,8 @@ func reloadHooks(bundb *bun.DB) {
 		}
 	}
 
-	entriesMu.Lock()
-	defer entriesMu.Unlock()
+	hooksMu.Lock()
+	defer hooksMu.Unlock()
 	hooks = ee
 	log.Printf("Reloaded %d hooks", len(ee))
 }
@@ -400,6 +401,10 @@ func manager() {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
+		if _, err := url.Parse(hook.Endpoint); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
 		_, err = bundb.NewInsert().Model(&hook).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
@@ -414,6 +419,10 @@ func manager() {
 			err = errors.New("name must not be empty")
 		}
 		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if _, err := url.Parse(hook.Endpoint); err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
@@ -450,7 +459,7 @@ func manager() {
 		return c.JSON(http.StatusOK, hooks)
 	})
 
-	e.GET("/crons/:name", func(c echo.Context) error {
+	e.GET("/tasks/:name", func(c echo.Context) error {
 		var task Task
 		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
 		if err != nil {
@@ -459,7 +468,7 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, task)
 	})
-	e.POST("/crons/", func(c echo.Context) error {
+	e.POST("/tasks/", func(c echo.Context) error {
 		var task Task
 		err := c.Bind(&task)
 		if err == nil && task.Name == "" {
@@ -473,6 +482,10 @@ func manager() {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
+		if _, err := url.Parse(task.Endpoint); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
 		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
@@ -480,13 +493,21 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, task)
 	})
-	e.POST("/crons/:name", func(c echo.Context) error {
+	e.POST("/tasks/:name", func(c echo.Context) error {
 		var task Task
 		err := c.Bind(&task)
 		if err == nil && task.Name == "" {
 			err = errors.New("name must not be empty")
 		}
 		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if _, err := cron.ParseStandard(task.Spec); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if _, err := url.Parse(task.Endpoint); err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
@@ -497,7 +518,7 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, task)
 	})
-	e.DELETE("/crons/:name", func(c echo.Context) error {
+	e.DELETE("/tasks/:name", func(c echo.Context) error {
 		_, err = bundb.NewDelete().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
@@ -505,7 +526,7 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
-	e.GET("/crons/:name", func(c echo.Context) error {
+	e.GET("/tasks/:name", func(c echo.Context) error {
 		var task Task
 		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
 		if err != nil {
@@ -514,7 +535,7 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, task)
 	})
-	e.GET("/crons", func(c echo.Context) error {
+	e.GET("/tasks", func(c echo.Context) error {
 		var tasks []Task
 		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &tasks)
 		if err != nil {
