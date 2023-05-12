@@ -312,6 +312,9 @@ func server(from *time.Time) {
 		return
 	}
 
+	reloadTimer := time.NewTimer(time.Minute)
+	defer reloadTimer.Stop()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
@@ -332,7 +335,7 @@ func server(from *time.Time) {
 					*from = ev.CreatedAt.Time()
 				}
 				retry = 0
-			case <-time.After(time.Minute):
+			case <-reloadTimer.C:
 				reloadHooks(bundb)
 				reloadTasks(bundb)
 			case <-time.After(10 * time.Second):
