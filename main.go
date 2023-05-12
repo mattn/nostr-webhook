@@ -80,6 +80,9 @@ type Task struct {
 
 	id cron.EntryID
 }
+type Info struct {
+	Version string `json:"version"`
+}
 
 var (
 	hooksMu sync.Mutex
@@ -162,6 +165,8 @@ func doEntries(ev *nostr.Event) {
 }
 
 func reloadTasks(bundb *bun.DB) {
+	log.Printf("Reload tasks")
+
 	var ee []Task
 	err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &ee)
 	if err != nil {
@@ -229,6 +234,8 @@ func reloadTasks(bundb *bun.DB) {
 }
 
 func reloadHooks(bundb *bun.DB) {
+	log.Printf("Reload hooks")
+
 	var ee []Hook
 	err := bundb.NewSelect().Model((*Hook)(nil)).Scan(context.Background(), &ee)
 	if err != nil {
@@ -542,6 +549,12 @@ func manager() {
 			log.Println(err)
 		}
 		return c.JSON(http.StatusOK, tasks)
+	})
+	e.GET("/info", func(c echo.Context) error {
+		info := Info{
+			Version: version,
+		}
+		return c.JSON(http.StatusOK, info)
 	})
 
 	e.Logger.Fatal(e.Start(":8989"))
