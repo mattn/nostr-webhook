@@ -100,8 +100,7 @@ table th, table td{
 }
 
 #menu {
-  width: 300px;
-  margin: 100px auto;
+  width: 80%;
   background-color: white;
   padding: 20px;
   border-radius: 0.5em;
