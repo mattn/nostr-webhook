@@ -547,6 +547,10 @@ func manager() {
 	e.Logger.Fatal(e.Start(":8989"))
 }
 
+func init() {
+	time.Local = time.FixedZone("Local", 9*60*60)
+}
+
 func main() {
 	var ver bool
 	flag.BoolVar(&ver, "v", false, "show version")
