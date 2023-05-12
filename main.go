@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo"
 	_ "github.com/lib/pq"
 	"github.com/nbd-wtf/go-nostr"
@@ -372,6 +373,24 @@ loop:
 	log.Println("Stopped")
 }
 
+func jwtUser(c echo.Context) (string, error) {
+	cookie, err := c.Request().Cookie("CF_Authentication")
+	if err != nil {
+		return "unknown", nil
+	}
+
+	claims := jwt.MapClaims{}
+	parser := new(jwt.Parser)
+	_, _, err = parser.ParseUnverified(cookie.Value, &claims)
+	if err != nil {
+		return "", err
+	}
+	if email, ok := map[string]interface{}(claims)["email"]; ok {
+		return email.(string), nil
+	}
+	return "", errors.New("sucks")
+}
+
 func manager() {
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -407,6 +426,12 @@ func manager() {
 		if err == nil && hook.Name == "" {
 			err = errors.New("name must not be empty")
 		}
+		if name, err := jwtUser(c); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			hook.Author = name
+		}
 		if err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
@@ -431,6 +456,12 @@ func manager() {
 		if err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if name, err := jwtUser(c); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			hook.Author = name
 		}
 		if _, err := url.Parse(hook.Endpoint); err != nil {
 			log.Println(err)
@@ -496,6 +527,12 @@ func manager() {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
+		if name, err := jwtUser(c); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			task.Author = name
+		}
 		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
@@ -520,6 +557,12 @@ func manager() {
 		if _, err := url.Parse(task.Endpoint); err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if name, err := jwtUser(c); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		} else {
+			task.Author = name
 		}
 		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
