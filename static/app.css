@@ -109,11 +109,16 @@ p.message-text {
   text-align: center;
 }
 
-#menu {
+.menu {
   width: 80%;
   background-color: white;
   padding: 20px;
-  border-radius: 0.5em;
+}
+
+.description {
+  margin: 0vh auto 0;
+  padding: 15px 30px;
+  text-align: center;
 }
 
 .button-center {
