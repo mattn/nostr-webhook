@@ -8,7 +8,7 @@
         <label><p>Spec (Crontab)</p><p><input type="text" onkeyup={ (e) => edit(e, 'spec') } class="input-spec" value={ state.item.spec } /></p></label>
         <label><p>Endpoint (URL)</p><p><input type="text" onkeyup={ (e) => edit(e, 'endpoint') } class="input-endpoint" value={ state.item.endpoint } /></p></label>
         <label><p>Enabled <input type="checkbox" onchange={ (e) => state.item.enabled = e.target.checked } checked={ state.item.enabled } /></p></label>
-        <label hidden={ state.create }><p>Secret: { state.item.secret }</p></label>
+        <label hidden={ state.create }><p class="secret">Secret: { state.item.secret }</p></label>
       </div>
       <p class="button-left">
         <button onclick={ remove } hidden={ state.create }>Delete</button>
@@ -37,7 +37,7 @@
       },
       remove(e) {
         e.preventDefault()
-        riot.mount('message', {message: 'Are you sure?', onOK: () => {
+        riot.mount('confirm', {message: 'Are you sure?', onOK: () => {
           fetch('/tasks/' + this.state.item.name, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
@@ -65,10 +65,13 @@
         })
           .then((res) => res.json())
           .then((json) => {
+            if (typeof json === 'string') throw new Error(json)
             this.unmount('task-modal', true)
             this.state.parent.reload();
           })
-          .catch(console.error)
+          .catch((err) => {
+            riot.mount('message', {message: err, onOK: () => {}})
+          })
       }
     }
   </script>

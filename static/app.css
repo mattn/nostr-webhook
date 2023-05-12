@@ -87,7 +87,17 @@ table th, table td{
   background-color: rgba(0,0,0,.2);
 }
 
-.message {
+.message-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 99999999;
+  background-color: rgba(0,0,0,.2);
+}
+
+.message, .confirm {
   width: 300px;
   margin: 100px auto;
   background-color: white;
@@ -106,6 +116,11 @@ p.message-text {
   border-radius: 0.5em;
 }
 
+.button-center {
+  margin: 0px;
+  text-align: center;
+}
+
 .button-left {
   margin: 0px;
   text-align: left;
@@ -115,4 +130,8 @@ p.message-text {
 .button-right {
   margin: 0px;
   text-align: right;
+}
+
+.secret {
+  color: #444;
 }
