@@ -10,10 +10,10 @@
         <label><p>Enabled <input type="checkbox" onchange={ (e) => state.item.enabled = e.target.checked } checked={ state.item.enabled } /></p></label>
         <label hidden={ state.create }><p>Secret: { state.item.secret }</p></label>
       </div>
-      <p style="float:left;">
+      <p class="button-left">
         <button onclick={ remove } hidden={ state.create }>Delete</button>
       </p>
-      <p style="text-align: right">
+      <p class="button-right">
         <button>{ state.create ? "Add" : "Update" }</button>
         <button onclick={ close }>Cancel</button>
       </p>
@@ -37,7 +37,7 @@
       },
       remove(e) {
         e.preventDefault()
-        riot.mount('message', {message: 'Are you OK?', onOK: () => {
+        riot.mount('message', {message: 'Are you sure?', onOK: () => {
           fetch('/tasks/' + this.state.item.name, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },

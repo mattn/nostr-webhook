@@ -71,7 +71,7 @@ table th, table td{
 
 .dialog {
   width: 500px;
-  margin: 50px auto;
+  margin: 10px auto;
   background-color: white;
   padding: 20px;
   border-radius: 0.5em;
@@ -95,7 +95,7 @@ table th, table td{
   border-radius: 0.5em;
 }
 
-.message p {
+p.message-text {
   text-align: center;
 }
 
@@ -104,4 +104,15 @@ table th, table td{
   background-color: white;
   padding: 20px;
   border-radius: 0.5em;
+}
+
+.button-left {
+  margin: 0px;
+  text-align: left;
+  float: left;
+}
+
+.button-right {
+  margin: 0px;
+  text-align: right;
 }

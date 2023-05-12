@@ -1,9 +1,13 @@
 <message>
   <div class="message-screen" show={dialogShowing} onclick={closeDialog}>
     <div class="message">
-      <p>{ state.message }</p>
-      <button onclick={ ok }>OK</button>
-      <button onclick={ cancel }>Cancel</button>
+      <p class="message-text">{ state.message }</p>
+      <p class="button-left">
+        <button onclick={ ok }>OK</button>
+      </p>
+      <p class="button-right">
+        <button onclick={ cancel }>Cancel</button>
+      </p>
     </div>
   </div>
 
