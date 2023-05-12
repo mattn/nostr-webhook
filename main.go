@@ -30,7 +30,7 @@ import (
 
 const name = "nostr-webhook"
 
-const version = "0.0.17"
+const version = "0.0.18"
 
 var revision = "HEAD"
 
