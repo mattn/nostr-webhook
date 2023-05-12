@@ -21,6 +21,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
+	"github.com/robfig/cron/v3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
@@ -48,8 +49,8 @@ var (
 	assets embed.FS
 )
 
-type entry struct {
-	bun.BaseModel `bun:"table:entry,alias:e"`
+type Hook struct {
+	bun.BaseModel `bun:"table:hook,alias:e"`
 
 	Name        string    `bun:"name,notnull" json:"name"`
 	Description string    `bun:"description,notnull" json:"description"`
@@ -64,25 +65,52 @@ type entry struct {
 	re *regexp.Regexp
 }
 
-var hooks = []entry{}
+type Task struct {
+	bun.BaseModel `bun:"table:task,alias:t"`
 
-func doHooks(ev *nostr.Event) {
+	Name        string    `bun:"name,notnull" json:"name"`
+	Description string    `bun:"description,notnull" json:"description"`
+	Author      string    `bun:"author,notnull" json:"author"`
+	Spec        string    `bun:"cronspec,notnull" json:"spec"`
+	Endpoint    string    `bun:"endpoint,notnull" json:"endpoint"`
+	Secret      string    `bun:"secret,notnull,default:random_string(12)" json:"secret"`
+	Enabled     bool      `bun:"enabled,notnull,default:false" json:"enabled"`
+	CreatedAt   time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+
+	id cron.EntryID
+}
+
+var (
+	entriesMu sync.Mutex
+	hooks     = []Hook{}
+	cronsMu   sync.Mutex
+	crons     = []Task{}
+
+	jobs = cron.New()
+)
+
+func doEntries(ev *nostr.Event) {
 	b, err := json.Marshal(ev)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	for _, hook := range hooks {
-		if !hook.re.MatchString(ev.Content) {
+	entriesMu.Lock()
+	defer entriesMu.Unlock()
+	for _, entry := range hooks {
+		if !entry.Enabled {
 			continue
 		}
-		if hook.MentionTo != "" {
+		if !entry.re.MatchString(ev.Content) {
+			continue
+		}
+		if entry.MentionTo != "" {
 			found := false
 			for _, tag := range ev.Tags {
 				if tag.Key() != "p" {
 					continue
 				}
-				if tag.Value() == hook.MentionTo {
+				if tag.Value() == entry.MentionTo {
 					found = true
 				}
 			}
@@ -90,13 +118,13 @@ func doHooks(ev *nostr.Event) {
 				return
 			}
 		}
-		log.Printf("%v: Matched entry", hook.Name)
-		req, err := http.NewRequest(http.MethodPost, hook.Endpoint, bytes.NewReader(b))
+		log.Printf("%v: Matched entry", entry.Name)
+		req, err := http.NewRequest(http.MethodPost, entry.Endpoint, bytes.NewReader(b))
 		if err != nil {
-			log.Printf("%v: %v", hook.Name, err)
+			log.Printf("%v: %v", entry.Name, err)
 			continue
 		}
-		req.Header.Set("Authorization", "Bearer "+hook.Secret)
+		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		go func(req *http.Request, name string) {
 			client := new(http.Client)
 			client.Timeout = 15 * time.Second
@@ -128,31 +156,104 @@ func doHooks(ev *nostr.Event) {
 				}
 				relay.Close()
 			}
-		}(req, hook.Name)
+		}(req, entry.Name)
 	}
 }
 
-func reloadEntries(bundb *bun.DB) {
-	err := bundb.NewSelect().Model((*entry)(nil)).Scan(context.Background(), &hooks)
+func reloadTasks(bundb *bun.DB) {
+	var cc []Task
+	err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &cc)
 	if err != nil {
 		log.Println(err)
+		return
 	}
-	for i := range hooks {
-		if hooks[i].Pattern != "" {
-			hooks[i].re, err = regexp.Compile(hooks[i].Pattern)
+
+	jobs.Stop()
+	for _, cr := range crons {
+		jobs.Remove(cr.id)
+	}
+	for i := range cc {
+		ct := cc[i]
+		id, err := jobs.AddFunc(ct.Spec, func() {
+			log.Printf("%v: Start", ct.Name)
+			req, err := http.NewRequest(http.MethodGet, ct.Endpoint, nil)
+			if err != nil {
+				log.Printf("%v: %v", ct.Name, err)
+				return
+			}
+			req.Header.Set("Authorization", "Bearer "+ct.Secret)
+			client := new(http.Client)
+			client.Timeout = 15 * time.Second
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				log.Printf("%v: Invalid status code: %v", ct.Name, resp.StatusCode)
+				return
+			}
+			var eev nostr.Event
+			err = json.NewDecoder(resp.Body).Decode(&eev)
+			if err != nil {
+				log.Printf("%v: %v", ct.Name, err)
+				return
+			}
+			for _, r := range postRelays {
+				relay, err := nostr.RelayConnect(context.Background(), r)
+				if err != nil {
+					log.Printf("%v: %v: %v", ct.Name, r, err)
+					continue
+				}
+				_, err = relay.Publish(context.Background(), eev)
+				if err != nil {
+					log.Printf("%v: %v: %v", ct.Name, r, err)
+				}
+				relay.Close()
+			}
+		})
+		if err != nil {
+			log.Printf("%v: Failed to add task: %v", ct.Name, err)
+			continue
+		}
+		cc[i].id = id
+	}
+	jobs.Start()
+
+	cronsMu.Lock()
+	defer cronsMu.Unlock()
+	crons = cc
+	log.Printf("Reloaded %d crons", len(cc))
+}
+
+func reloadHooks(bundb *bun.DB) {
+	var ee []Hook
+	err := bundb.NewSelect().Model((*Hook)(nil)).Scan(context.Background(), &ee)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	for i := range ee {
+		if ee[i].Pattern != "" {
+			ee[i].re, err = regexp.Compile(ee[i].Pattern)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
-		if hooks[i].MentionTo != "" {
-			_, npub, err := nip19.Decode(hooks[i].MentionTo)
+		if ee[i].MentionTo != "" {
+			_, npub, err := nip19.Decode(ee[i].MentionTo)
 			if err != nil {
 				log.Fatal(err)
 			}
-			hooks[i].MentionTo = npub.(string)
+			ee[i].MentionTo = npub.(string)
 		}
 	}
-	log.Printf("Reloaded %d entries", len(hooks))
+
+	entriesMu.Lock()
+	defer entriesMu.Unlock()
+	hooks = ee
+	log.Printf("Reloaded %d hooks", len(ee))
 }
 
 func server(from *time.Time) {
@@ -167,12 +268,19 @@ func server(from *time.Time) {
 	bundb := bun.NewDB(db, pgdialect.New())
 	defer bundb.Close()
 
-	_, err = bundb.NewCreateTable().Model((*entry)(nil)).IfNotExists().Exec(context.Background())
+	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	reloadEntries(bundb)
+	reloadHooks(bundb)
+
+	_, err = bundb.NewCreateTable().Model((*Task)(nil)).IfNotExists().Exec(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	reloadTasks(bundb)
 
 	log.Println("Connecting to relay")
 	relay, err := nostr.RelayConnect(context.Background(), feedRelay)
@@ -211,13 +319,14 @@ func server(from *time.Time) {
 					break events_loop
 				}
 				enc.Encode(ev)
-				doHooks(ev)
+				doEntries(ev)
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
 				}
 				retry = 0
 			case <-time.After(time.Minute):
-				reloadEntries(bundb)
+				reloadHooks(bundb)
+				reloadTasks(bundb)
 			case <-time.After(10 * time.Second):
 				if relay.ConnectionError != nil {
 					log.Println(err)
@@ -262,7 +371,7 @@ func manager() {
 	bundb := bun.NewDB(db, pgdialect.New())
 	defer bundb.Close()
 
-	_, err = bundb.NewCreateTable().Model((*entry)(nil)).IfNotExists().Exec(context.Background())
+	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
 		log.Println(err)
 		return
@@ -271,17 +380,18 @@ func manager() {
 	e := echo.New()
 	sub, _ := fs.Sub(assets, "static")
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(sub))))
-	e.GET("/entries/:name", func(c echo.Context) error {
-		var hook entry
-		err = bundb.NewSelect().Model((*entry)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
+
+	e.GET("/hooks/:name", func(c echo.Context) error {
+		var hook Hook
+		err = bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
 		if err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, hook)
 	})
-	e.POST("/entries/", func(c echo.Context) error {
-		var hook entry
+	e.POST("/hooks/", func(c echo.Context) error {
+		var hook Hook
 		err := c.Bind(&hook)
 		if err == nil && hook.Name == "" {
 			err = errors.New("name must not be empty")
@@ -297,8 +407,8 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, hook)
 	})
-	e.POST("/entries/:name", func(c echo.Context) error {
-		var hook entry
+	e.POST("/hooks/:name", func(c echo.Context) error {
+		var hook Hook
 		err := c.Bind(&hook)
 		if err == nil && hook.Name == "" {
 			err = errors.New("name must not be empty")
@@ -314,31 +424,105 @@ func manager() {
 		}
 		return c.JSON(http.StatusOK, hook)
 	})
-	e.DELETE("/entries/:name", func(c echo.Context) error {
-		_, err = bundb.NewDelete().Model((*entry)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
+	e.DELETE("/hooks/:name", func(c echo.Context) error {
+		_, err = bundb.NewDelete().Model((*Hook)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
-	e.GET("/entries/:name", func(c echo.Context) error {
-		var hook entry
-		err := bundb.NewSelect().Model((*entry)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
+	e.GET("/hooks/:name", func(c echo.Context) error {
+		var hook Hook
+		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
 		if err != nil {
 			log.Println(err)
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, hook)
 	})
-	e.GET("/entries", func(c echo.Context) error {
-		var hooks []entry
-		err = bundb.NewSelect().Model((*entry)(nil)).Order("created_at").Scan(context.Background(), &hooks)
+	e.GET("/hooks", func(c echo.Context) error {
+		var hooks []Hook
+		err = bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Scan(context.Background(), &hooks)
 		if err != nil {
 			log.Println(err)
 		}
 		return c.JSON(http.StatusOK, hooks)
 	})
+
+	e.GET("/crons/:name", func(c echo.Context) error {
+		var task Task
+		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, task)
+	})
+	e.POST("/crons/", func(c echo.Context) error {
+		var task Task
+		err := c.Bind(&task)
+		if err == nil && task.Name == "" {
+			err = errors.New("name must not be empty")
+		}
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		if _, err := cron.ParseStandard(task.Spec); err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, task)
+	})
+	e.POST("/crons/:name", func(c echo.Context) error {
+		var task Task
+		err := c.Bind(&task)
+		if err == nil && task.Name == "" {
+			err = errors.New("name must not be empty")
+		}
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, task)
+	})
+	e.DELETE("/crons/:name", func(c echo.Context) error {
+		_, err = bundb.NewDelete().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, c.Param("name"))
+	})
+	e.GET("/crons/:name", func(c echo.Context) error {
+		var task Task
+		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
+		if err != nil {
+			log.Println(err)
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, task)
+	})
+	e.GET("/crons", func(c echo.Context) error {
+		var tasks []Task
+		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &tasks)
+		if err != nil {
+			log.Println(err)
+		}
+		return c.JSON(http.StatusOK, tasks)
+	})
+
 	e.Logger.Fatal(e.Start(":8989"))
 }
 

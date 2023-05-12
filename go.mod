@@ -6,6 +6,7 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/lib/pq v1.10.9
 	github.com/nbd-wtf/go-nostr v0.18.1
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/uptrace/bun v1.1.13
 	github.com/uptrace/bun/dialect/pgdialect v1.1.13
 )

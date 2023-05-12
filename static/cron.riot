@@ -1,0 +1,43 @@
+<cron>
+  <h3><a href="/">{ props.title }</a></h3>
+
+  <table>
+    <tr>
+      <th>Name</th>
+      <th>Spec</th>
+      <th>Endpoint</th>
+      <th>-</th>
+    </tr>
+    <tr each={ item in state.items } class={ item.enabled ? null : 'disabled' }>
+      <td>{ item.name }</td>
+      <td>{ item.spec }</td>
+      <td>{ item.endpoint }</td>
+      <td><button onclick={() => modify(item)}>Edit</button></td>
+    </tr>
+  </table>
+  <br />
+  <button onclick={() => create()}>New</button>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          items: props.items,
+        }
+        this.reload();
+      },
+      reload() {
+        const reloader = async () => {
+          this.update({items: await (await fetch('/crons')).json()})
+        }
+        reloader();
+      },
+      create() {
+        riot.mount('cron-modal', {item: {}, create: true, parent: this})
+      },
+      modify(item) {
+        riot.mount('cron-modal', {item: item, create: false, parent: this})
+      }
+    }
+  </script>
+</cron>

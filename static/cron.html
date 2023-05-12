@@ -1,0 +1,30 @@
+<!doctype html>
+
+<html>
+  <head>
+    <title>Webhooks</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link rel="stylesheet" href="app.css">
+  </head>
+
+  <body>
+
+    <cron></cron>
+    <cron-modal></cron-modal>
+    <message></message>
+
+    <script src="cron.riot" type="riot"></script>
+    <script src="cron-modal.riot" type="riot"></script>
+    <script src="message.riot" type="riot"></script>
+    <script src="/riot+compiler.min.js"></script>
+
+    <script>
+      riot.compile().then(async () => {
+        riot.mount('cron', {
+          title: 'webhooks',
+          items: [],
+        })
+      })
+    </script>
+  </body>
+</html>

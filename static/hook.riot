@@ -1,5 +1,5 @@
-<entry>
-  <h3>{ props.title }</h3>
+<hook>
+  <h3><a href="/">{ props.title }</a></h3>
 
   <table>
     <tr>
@@ -30,16 +30,16 @@
       },
       reload() {
         const reloader = async () => {
-          this.update({items: await (await fetch('/entries')).json()})
+          this.update({items: await (await fetch('/hooks')).json()})
         }
         reloader();
       },
       create() {
-        riot.mount('modal', {item: {}, create: true, parent: this}, 'modal')
+        riot.mount('hook-modal', {item: {}, create: true, parent: this})
       },
       modify(item) {
-        riot.mount('modal', {item: item, create: false, parent: this}, 'modal')
+        riot.mount('hook-modal', {item: item, create: false, parent: this})
       }
     }
   </script>
-</entry>
+</hook>
