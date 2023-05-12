@@ -87,7 +87,7 @@ var (
 	tasksMu sync.Mutex
 	tasks   = []Task{}
 
-	jobs = cron.New()
+	jobs *cron.Cron
 )
 
 func doEntries(ev *nostr.Event) {
@@ -549,6 +549,7 @@ func manager() {
 
 func init() {
 	time.Local = time.FixedZone("Local", 9*60*60)
+	jobs = cron.New(cron.WithLocation(time.Local))
 }
 
 func main() {
