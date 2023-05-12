@@ -90,14 +90,14 @@ func doHooks(ev *nostr.Event) {
 				return
 			}
 		}
-		log.Printf("Matched entry %s", hook.Name)
+		log.Printf("%v: Matched entry", hook.Name)
 		req, err := http.NewRequest(http.MethodPost, hook.Endpoint, bytes.NewReader(b))
 		if err != nil {
-			log.Println(err)
+			log.Printf("%v: %v", hook.Name, err)
 			continue
 		}
 		req.Header.Set("Authorization", "Bearer "+hook.Secret)
-		go func(req *http.Request) {
+		go func(req *http.Request, name string) {
 			client := new(http.Client)
 			client.Timeout = 15 * time.Second
 			resp, err := client.Do(req)
@@ -106,24 +106,29 @@ func doHooks(ev *nostr.Event) {
 				return
 			}
 			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
+				return
+			}
 			var eev nostr.Event
 			err = json.NewDecoder(resp.Body).Decode(&eev)
 			if err != nil {
+				log.Printf("%v: %v", name, err)
 				return
 			}
 			for _, r := range postRelays {
 				relay, err := nostr.RelayConnect(context.Background(), r)
 				if err != nil {
-					log.Println(err)
+					log.Printf("%v: %v: %v", name, r, err)
 					continue
 				}
 				_, err = relay.Publish(context.Background(), eev)
 				if err != nil {
-					log.Println(err)
+					log.Printf("%v: %v: %v", name, r, err)
 				}
 				relay.Close()
 			}
-		}(req)
+		}(req, hook.Name)
 	}
 }
 
