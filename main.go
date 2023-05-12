@@ -374,7 +374,7 @@ loop:
 }
 
 func jwtUser(c echo.Context) (string, error) {
-	cookie, err := c.Request().Cookie("CF_Authentication")
+	cookie, err := c.Request().Cookie("CF_Authorization")
 	if err != nil {
 		return "unknown", nil
 	}
@@ -388,7 +388,7 @@ func jwtUser(c echo.Context) (string, error) {
 	if email, ok := map[string]interface{}(claims)["email"]; ok {
 		return email.(string), nil
 	}
-	return "", errors.New("sucks")
+	return "unknown", nil
 }
 
 func manager() {
