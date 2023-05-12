@@ -11,9 +11,13 @@
         <label><p>Enabled <input type="checkbox" onchange={ (e) => state.item.enabled = e.target.checked } checked={ state.item.enabled } /></p></label>
         <label hidden={ state.create }><p>Secret: { state.item.secret }</p></label>
       </div>
-      <button onclick={ remove } hidden={ state.create }>Delete</button>
-      <button>{ state.create ? "Add" : "Update" }</button>
-      <button onclick={ close }>Cancel</button>
+      <p style="float:left;">
+        <button onclick={ remove } hidden={ state.create }>Delete</button>
+      </p>
+      <p style="text-align: right">
+        <button>{ state.create ? "Add" : "Update" }</button>
+        <button onclick={ close }>Cancel</button>
+      </p>
     </form>
     </div>
   </div>
