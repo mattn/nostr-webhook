@@ -389,31 +389,32 @@ func jwtUser(c echo.Context) (string, error) {
 	return "unknown", nil
 }
 
-func checkHook(c echo.Context, hook *Hook) error {
+func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if _, err := regexp.Compile(hook.Pattern); err != nil {
-		return c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+		log.Println(err)
+		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
 	}
 	if _, err := url.Parse(hook.Endpoint); err != nil {
-		return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+		log.Println(err)
+		return false, c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
 	}
 	if hook.MentionTo != "" {
 		if _, _, err := nip19.Decode(hook.MentionTo); err != nil {
-			return c.JSON(http.StatusBadRequest, "MentionTo is not npub format")
+			log.Println(err)
+			return false, c.JSON(http.StatusBadRequest, "MentionTo is not npub format")
 		}
 	}
-	return nil
+	return true, nil
 }
 
-func checkTask(c echo.Context, task *Task) error {
+func checkTask(c echo.Context, task *Task) (bool, error) {
 	if _, err := cron.ParseStandard(task.Spec); err != nil {
-		log.Println(err)
-		return c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
+		return false, c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
 	}
 	if _, err := url.Parse(task.Endpoint); err != nil {
-		log.Println(err)
-		return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+		return false, c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
 	}
-	return nil
+	return true, nil
 }
 
 func manager() {
@@ -469,8 +470,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if err := checkHook(c, &hook); err != nil {
-			log.Println(err)
+		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
 		_, err = bundb.NewInsert().Model(&hook).Exec(context.Background())
@@ -497,8 +497,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if err := checkHook(c, &hook); err != nil {
-			log.Println(err)
+		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
 		_, err = bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
@@ -555,8 +554,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if err := checkTask(c, &task); err != nil {
-			log.Println(err)
+		if ok, err := checkTask(c, &task); !ok {
 			return err
 		}
 		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
@@ -583,8 +581,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if err := checkTask(c, &task); err != nil {
-			log.Println(err)
+		if ok, err := checkTask(c, &task); !ok {
 			return err
 		}
 		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
