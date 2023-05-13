@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -390,6 +389,22 @@ func jwtUser(c echo.Context) (string, error) {
 }
 
 func checkHook(c echo.Context, hook *Hook) (bool, error) {
+	if err := c.Bind(&hook); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	if hook.Name == "" {
+		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
+	}
+	if hook.Endpoint == "" {
+		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
+	}
+	if name, err := jwtUser(c); err == nil {
+		hook.Author = name
+	} else {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
 	if _, err := regexp.Compile(hook.Pattern); err != nil {
 		log.Println(err)
 		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
@@ -408,10 +423,24 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 }
 
 func checkTask(c echo.Context, task *Task) (bool, error) {
+	if task.Name == "" {
+		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
+	}
+	if task.Endpoint == "" {
+		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
+	}
+	if name, err := jwtUser(c); err == nil {
+		task.Author = name
+	} else {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
 	if _, err := cron.ParseStandard(task.Spec); err != nil {
+		log.Println(err)
 		return false, c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
 	}
 	if _, err := url.Parse(task.Endpoint); err != nil {
+		log.Println(err)
 		return false, c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
 	}
 	return true, nil
@@ -456,24 +485,10 @@ func manager() {
 	})
 	e.POST("/hooks/", func(c echo.Context) error {
 		var hook Hook
-		err := c.Bind(&hook)
-		if err == nil && hook.Name == "" {
-			err = errors.New("Name must not be empty")
-		}
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		if name, err := jwtUser(c); err == nil {
-			hook.Author = name
-		} else {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
 		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
-		_, err = bundb.NewInsert().Model(&hook).Exec(context.Background())
+		_, err := bundb.NewInsert().Model(&hook).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -483,24 +498,10 @@ func manager() {
 	})
 	e.POST("/hooks/:name", func(c echo.Context) error {
 		var hook Hook
-		err := c.Bind(&hook)
-		if err == nil && hook.Name == "" {
-			err = errors.New("Name must not be empty")
-		}
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		if name, err := jwtUser(c); err == nil {
-			hook.Author = name
-		} else {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
 		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
-		_, err = bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
+		_, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -540,24 +541,10 @@ func manager() {
 	})
 	e.POST("/tasks/", func(c echo.Context) error {
 		var task Task
-		err := c.Bind(&task)
-		if err == nil && task.Name == "" {
-			err = errors.New("Name must not be empty")
-		}
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		if name, err := jwtUser(c); err == nil {
-			task.Author = name
-		} else {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
 		if ok, err := checkTask(c, &task); !ok {
 			return err
 		}
-		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
+		_, err := bundb.NewInsert().Model(&task).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -567,20 +554,6 @@ func manager() {
 	})
 	e.POST("/tasks/:name", func(c echo.Context) error {
 		var task Task
-		err := c.Bind(&task)
-		if err == nil && task.Name == "" {
-			err = errors.New("Name must not be empty")
-		}
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		if name, err := jwtUser(c); err == nil {
-			task.Author = name
-		} else {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
 		if ok, err := checkTask(c, &task); !ok {
 			return err
 		}
