@@ -317,9 +317,6 @@ func server(from *time.Time) {
 		return
 	}
 
-	reloadTimer := time.NewTicker(time.Minute)
-	defer reloadTimer.Stop()
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
@@ -340,9 +337,6 @@ func server(from *time.Time) {
 					*from = ev.CreatedAt.Time()
 				}
 				retry = 0
-			case <-reloadTimer.C:
-				reloadHooks(bundb)
-				reloadTasks(bundb)
 			case <-time.After(10 * time.Second):
 				if relay.ConnectionError != nil {
 					log.Println(err)
@@ -453,6 +447,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadHooks(bundb)
 		return c.JSON(http.StatusOK, hook)
 	})
 	e.POST("/hooks/:name", func(c echo.Context) error {
@@ -484,6 +479,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadHooks(bundb)
 		return c.JSON(http.StatusOK, hook)
 	})
 	e.DELETE("/hooks/:name", func(c echo.Context) error {
@@ -492,6 +488,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadHooks(bundb)
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
 	e.GET("/hooks/:name", func(c echo.Context) error {
@@ -550,6 +547,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, task)
 	})
 	e.POST("/tasks/:name", func(c echo.Context) error {
@@ -581,6 +579,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, task)
 	})
 	e.DELETE("/tasks/:name", func(c echo.Context) error {
@@ -589,6 +588,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
 	e.GET("/tasks/:name", func(c echo.Context) error {
