@@ -51,6 +51,7 @@ var (
 	assets embed.FS
 )
 
+// Hook is struct for webhook
 type Hook struct {
 	bun.BaseModel `bun:"table:hook,alias:e"`
 
@@ -67,6 +68,7 @@ type Hook struct {
 	re *regexp.Regexp
 }
 
+// Task is struct for cronjob
 type Task struct {
 	bun.BaseModel `bun:"table:task,alias:t"`
 
@@ -81,6 +83,8 @@ type Task struct {
 
 	id cron.EntryID
 }
+
+// Info is struct for /info
 type Info struct {
 	Version string `json:"version"`
 }
@@ -430,11 +434,11 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if name, err := jwtUser(c); err != nil {
+		if name, err := jwtUser(c); err == nil {
+			hook.Author = name
+		} else {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
-		} else {
-			hook.Author = name
 		}
 		if _, err := regexp.Compile(hook.Pattern); err != nil {
 			log.Println(err)
@@ -461,11 +465,11 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if name, err := jwtUser(c); err != nil {
+		if name, err := jwtUser(c); err == nil {
+			hook.Author = name
+		} else {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
-		} else {
-			hook.Author = name
 		}
 		if _, err := regexp.Compile(hook.Pattern); err != nil {
 			log.Println(err)
@@ -527,11 +531,11 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if name, err := jwtUser(c); err != nil {
+		if name, err := jwtUser(c); err == nil {
+			task.Author = name
+		} else {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
-		} else {
-			task.Author = name
 		}
 		if _, err := cron.ParseStandard(task.Spec); err != nil {
 			log.Println(err)
@@ -558,11 +562,11 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if name, err := jwtUser(c); err != nil {
+		if name, err := jwtUser(c); err == nil {
+			task.Author = name
+		} else {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
-		} else {
-			task.Author = name
 		}
 		if _, err := cron.ParseStandard(task.Spec); err != nil {
 			log.Println(err)
