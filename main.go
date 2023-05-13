@@ -389,6 +389,33 @@ func jwtUser(c echo.Context) (string, error) {
 	return "unknown", nil
 }
 
+func checkHook(c echo.Context, hook *Hook) error {
+	if _, err := regexp.Compile(hook.Pattern); err != nil {
+		return c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+	}
+	if _, err := url.Parse(hook.Endpoint); err != nil {
+		return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+	}
+	if hook.MentionTo != "" {
+		if _, _, err := nip19.Decode(hook.MentionTo); err != nil {
+			return c.JSON(http.StatusBadRequest, "MentionTo is not npub format")
+		}
+	}
+	return nil
+}
+
+func checkTask(c echo.Context, task *Task) error {
+	if _, err := cron.ParseStandard(task.Spec); err != nil {
+		log.Println(err)
+		return c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
+	}
+	if _, err := url.Parse(task.Endpoint); err != nil {
+		log.Println(err)
+		return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+	}
+	return nil
+}
+
 func manager() {
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -409,9 +436,17 @@ func manager() {
 	sub, _ := fs.Sub(assets, "static")
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(sub))))
 
+	e.GET("/hooks", func(c echo.Context) error {
+		var hooks []Hook
+		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Scan(context.Background(), &hooks)
+		if err != nil {
+			log.Println(err)
+		}
+		return c.JSON(http.StatusOK, hooks)
+	})
 	e.GET("/hooks/:name", func(c echo.Context) error {
 		var hook Hook
-		err = bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
+		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -434,13 +469,9 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if _, err := regexp.Compile(hook.Pattern); err != nil {
+		if err := checkHook(c, &hook); err != nil {
 			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
-		}
-		if _, err := url.Parse(hook.Endpoint); err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+			return err
 		}
 		_, err = bundb.NewInsert().Model(&hook).Exec(context.Background())
 		if err != nil {
@@ -466,13 +497,9 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if _, err := regexp.Compile(hook.Pattern); err != nil {
+		if err := checkHook(c, &hook); err != nil {
 			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
-		}
-		if _, err := url.Parse(hook.Endpoint); err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+			return err
 		}
 		_, err = bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
@@ -483,35 +510,29 @@ func manager() {
 		return c.JSON(http.StatusOK, hook)
 	})
 	e.DELETE("/hooks/:name", func(c echo.Context) error {
-		_, err = bundb.NewDelete().Model((*Hook)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
+		result, err := bundb.NewDelete().Model((*Hook)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records deleted")
 		}
 		reloadHooks(bundb)
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
-	e.GET("/hooks/:name", func(c echo.Context) error {
-		var hook Hook
-		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		return c.JSON(http.StatusOK, hook)
-	})
-	e.GET("/hooks", func(c echo.Context) error {
-		var hooks []Hook
-		err = bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Scan(context.Background(), &hooks)
-		if err != nil {
-			log.Println(err)
-		}
-		return c.JSON(http.StatusOK, hooks)
-	})
 
+	e.GET("/tasks", func(c echo.Context) error {
+		var tasks []Task
+		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &tasks)
+		if err != nil {
+			log.Println(err)
+		}
+		return c.JSON(http.StatusOK, tasks)
+	})
 	e.GET("/tasks/:name", func(c echo.Context) error {
 		var task Task
-		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
+		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -534,13 +555,9 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if _, err := cron.ParseStandard(task.Spec); err != nil {
+		if err := checkTask(c, &task); err != nil {
 			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
-		}
-		if _, err := url.Parse(task.Endpoint); err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+			return err
 		}
 		_, err = bundb.NewInsert().Model(&task).Exec(context.Background())
 		if err != nil {
@@ -566,13 +583,9 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		if _, err := cron.ParseStandard(task.Spec); err != nil {
+		if err := checkTask(c, &task); err != nil {
 			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Spec is invalid crontab expression")
-		}
-		if _, err := url.Parse(task.Endpoint); err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+			return err
 		}
 		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
@@ -583,31 +596,18 @@ func manager() {
 		return c.JSON(http.StatusOK, task)
 	})
 	e.DELETE("/tasks/:name", func(c echo.Context) error {
-		_, err = bundb.NewDelete().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
+		result, err := bundb.NewDelete().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records deleted")
 		}
 		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
-	e.GET("/tasks/:name", func(c echo.Context) error {
-		var task Task
-		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
-		if err != nil {
-			log.Println(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		return c.JSON(http.StatusOK, task)
-	})
-	e.GET("/tasks", func(c echo.Context) error {
-		var tasks []Task
-		err = bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &tasks)
-		if err != nil {
-			log.Println(err)
-		}
-		return c.JSON(http.StatusOK, tasks)
-	})
+
 	e.GET("/info", func(c echo.Context) error {
 		info := Info{
 			Version: version,

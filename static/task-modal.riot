@@ -25,6 +25,7 @@
     export default {
       onBeforeMount(props, state) {
         this.state = {
+          name: props.item.name,
           item: props.item,
           create: props.create,
           parent: props.parent,
@@ -38,7 +39,7 @@
       remove(e) {
         e.preventDefault()
         riot.mount('confirm', {message: 'Are you sure?', onOK: () => {
-          fetch('/tasks/' + this.state.item.name, {
+          fetch('/tasks/' + this.state.name, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.state.item),
@@ -58,7 +59,7 @@
       },
       add(e) {
         e.preventDefault()
-        fetch('/tasks/' + (this.state.create ? '' : this.state.item.name), {
+        fetch('/tasks/' + (this.state.create ? '' : this.state.name), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.state.item),
