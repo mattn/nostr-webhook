@@ -54,7 +54,7 @@ var (
 type Hook struct {
 	bun.BaseModel `bun:"table:hook,alias:e"`
 
-	Name        string    `bun:"name,notnull" json:"name"`
+	Name        string    `bun:"name,pk,notnull" json:"name"`
 	Description string    `bun:"description,notnull" json:"description"`
 	Author      string    `bun:"author,notnull" json:"author"`
 	Pattern     string    `bun:"pattern,notnull" json:"pattern"`
@@ -70,7 +70,7 @@ type Hook struct {
 type Task struct {
 	bun.BaseModel `bun:"table:task,alias:t"`
 
-	Name        string    `bun:"name,notnull" json:"name"`
+	Name        string    `bun:"name,pk,notnull" json:"name"`
 	Description string    `bun:"description,notnull" json:"description"`
 	Author      string    `bun:"author,notnull" json:"author"`
 	Spec        string    `bun:"spec,notnull" json:"spec"`
