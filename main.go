@@ -313,7 +313,7 @@ func server(from *time.Time) {
 		return
 	}
 
-	reloadTimer := time.NewTimer(time.Minute)
+	reloadTimer := time.NewTicker(time.Minute)
 	defer reloadTimer.Stop()
 
 	var wg sync.WaitGroup
