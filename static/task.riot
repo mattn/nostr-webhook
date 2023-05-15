@@ -27,8 +27,10 @@
         this.reload();
       },
       reload() {
+        riot.mount('loading', {message: 'Loading...'})
         const reloader = async () => {
           this.update({items: await (await fetch('/tasks')).json()})
+          riot.unmount('loading', true)
         }
         reloader();
       },

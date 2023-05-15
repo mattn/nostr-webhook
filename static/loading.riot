@@ -1,0 +1,18 @@
+<loading>
+  <div class="message-screen" show={dialogShowing} onclick={closeDialog}>
+    <div class="loading">
+      <p class="message-text">{ state.message }</p>
+    </div>
+  </div>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          message: props.message,
+        }
+      }
+    }
+  </script>
+</loading>
+
