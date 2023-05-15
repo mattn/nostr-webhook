@@ -2,3 +2,4 @@ secret.yaml
 k8s
 *.sh
 nostr-webhook
+backup
