@@ -423,6 +423,10 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 }
 
 func checkTask(c echo.Context, task *Task) (bool, error) {
+	if err := c.Bind(&task); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
 	if task.Name == "" {
 		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
 	}
