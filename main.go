@@ -19,6 +19,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	_ "github.com/lib/pq"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
@@ -467,6 +468,8 @@ func manager() {
 	}
 
 	e := echo.New()
+	e.Use(middleware.Logger())
+
 	sub, _ := fs.Sub(assets, "static")
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(sub))))
 
@@ -474,7 +477,8 @@ func manager() {
 		var hooks []Hook
 		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Scan(context.Background(), &hooks)
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, hooks)
 	})
@@ -482,7 +486,7 @@ func manager() {
 		var hook Hook
 		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, hook)
@@ -494,7 +498,7 @@ func manager() {
 		}
 		_, err := bundb.NewInsert().Model(&hook).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		reloadHooks(bundb)
@@ -507,7 +511,7 @@ func manager() {
 		}
 		_, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		reloadHooks(bundb)
@@ -516,7 +520,7 @@ func manager() {
 	e.DELETE("/hooks/:name", func(c echo.Context) error {
 		result, err := bundb.NewDelete().Model((*Hook)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		if num, err := result.RowsAffected(); err != nil || num == 0 {
@@ -530,7 +534,8 @@ func manager() {
 		var tasks []Task
 		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Scan(context.Background(), &tasks)
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, tasks)
 	})
@@ -538,7 +543,7 @@ func manager() {
 		var task Task
 		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, task)
@@ -550,7 +555,7 @@ func manager() {
 		}
 		_, err := bundb.NewInsert().Model(&task).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		reloadTasks(bundb)
@@ -563,7 +568,7 @@ func manager() {
 		}
 		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		reloadTasks(bundb)
@@ -572,7 +577,7 @@ func manager() {
 	e.DELETE("/tasks/:name", func(c echo.Context) error {
 		result, err := bundb.NewDelete().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
-			log.Println(err)
+			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 		if num, err := result.RowsAffected(); err != nil || num == 0 {
