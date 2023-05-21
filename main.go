@@ -469,6 +469,7 @@ func manager() {
 
 	e := echo.New()
 	e.Use(middleware.Logger())
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
 
 	sub, _ := fs.Sub(assets, "static")
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(sub))))
