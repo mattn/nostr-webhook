@@ -37,6 +37,7 @@ var revision = "HEAD"
 var (
 	feedRelays = []string{
 		"wss://relay-jp.nostr.wirednet.jp",
+		"wss://nostr.h3z.jp",
 		"nostr-relay.nokotaro.com",
 	}
 	feedIndex = 0
