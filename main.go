@@ -91,6 +91,7 @@ type Task struct {
 
 // Info is struct for /info
 type Info struct {
+	Relay   string `json:"relay"`
 	Version string `json:"version"`
 }
 
@@ -596,6 +597,7 @@ func manager() {
 
 	e.GET("/info", func(c echo.Context) error {
 		info := Info{
+			Relay:   feedRelays[feedIndex%len(feedRelays)],
 			Version: version,
 		}
 		return c.JSON(http.StatusOK, info)
