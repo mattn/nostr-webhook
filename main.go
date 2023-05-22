@@ -319,6 +319,7 @@ func server(from *time.Time) {
 	}}
 	sub, err := relay.Subscribe(context.Background(), filters)
 	if err != nil {
+		feedIndex++
 		log.Println(err)
 		return
 	}
@@ -345,7 +346,7 @@ func server(from *time.Time) {
 				retry = 0
 			case <-time.After(10 * time.Second):
 				if relay.ConnectionError != nil {
-					log.Println(err)
+					log.Println(relay.ConnectionError)
 					close(events)
 					sub.Unsub()
 					break events_loop
