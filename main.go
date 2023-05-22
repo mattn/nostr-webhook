@@ -35,7 +35,11 @@ const version = "0.0.31"
 var revision = "HEAD"
 
 var (
-	feedRelay = "wss://relay-jp.nostr.wirednet.jp"
+	feedRelays = []string{
+		"wss://relay-jp.nostr.wirednet.jp",
+		"nostr-relay.nokotaro.com",
+	}
+	feedIndex = 0
 
 	postRelays = []string{
 		"wss://nostr-relay.nokotaro.com",
@@ -296,8 +300,9 @@ func server(from *time.Time) {
 	reloadTasks(bundb)
 
 	log.Println("Connecting to relay")
-	relay, err := nostr.RelayConnect(context.Background(), feedRelay)
+	relay, err := nostr.RelayConnect(context.Background(), feedRelays[feedIndex%len(feedRelays)])
 	if err != nil {
+		feedIndex++
 		log.Println(err)
 		return
 	}
