@@ -37,7 +37,7 @@ var revision = "HEAD"
 var (
 	feedRelays = []string{
 		"wss://relay-jp.nostr.wirednet.jp",
-		"wss://universe.nostrich.land/?lang=ja&lang=en",
+		"wss://nostr-relay.nokotaro.com",
 	}
 	feedIndex = 0
 
@@ -346,6 +346,7 @@ func server(from *time.Time) {
 				retry = 0
 			case <-time.After(10 * time.Second):
 				if relay.ConnectionError != nil {
+					feedIndex++
 					log.Println(relay.ConnectionError)
 					close(events)
 					sub.Unsub()
@@ -354,6 +355,7 @@ func server(from *time.Time) {
 				retry++
 				log.Println("Health check", retry)
 				if retry > 60 {
+					feedIndex++
 					close(events)
 					sub.Unsub()
 					break events_loop
