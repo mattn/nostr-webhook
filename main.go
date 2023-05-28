@@ -35,25 +35,37 @@ const version = "0.0.38"
 var revision = "HEAD"
 
 var (
-	feedRelays = []string{
-		"wss://relay-jp.nostr.wirednet.jp",
-		//"wss://nostr-relay.nokotaro.com",
+	feedRelays = []FeedRelay{
+		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
+		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: true},
 	}
 	feedIndex = 0
 
-	postRelays = []string{
-		"wss://nostr-relay.nokotaro.com",
-		"wss://relay-jp.nostr.wirednet.jp",
-		"wss://nostr.holybea.com",
-		"wss://relay.snort.social",
-		"wss://relay.damus.io",
-		"wss://relay.nostrich.land",
-		"wss://nostr.h3z.jp",
+	postRelays = []PostRelay{
+		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: true},
+		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
+		{Relay: "wss://nostr.holybea.com", Enabled: true},
+		{Relay: "wss://relay.snort.social", Enabled: true},
+		{Relay: "wss://relay.damus.io", Enabled: true},
+		{Relay: "wss://relay.nostrich.land", Enabled: true},
+		{Relay: "wss://nostr.h3z.jp", Enabled: true},
 	}
 
 	//go:embed static
 	assets embed.FS
 )
+
+// FeedRelay is struct for feed relay
+type FeedRelay struct {
+	Relay   string `bun:"relay,pk,notnull" json:"relay"`
+	Enabled bool   `bun:"enabled,default:false" json:"enabled"`
+}
+
+// PostRelay is struct for post relay
+type PostRelay struct {
+	Relay   string `bun:"relay,pk,notnull" json:"relay"`
+	Enabled bool   `bun:"enabled,default:false" json:"enabled"`
+}
 
 // Hook is struct for webhook
 type Hook struct {
@@ -95,6 +107,8 @@ type Info struct {
 }
 
 var (
+	relayMu sync.Mutex
+
 	hooksMu sync.Mutex
 	hooks   = []Hook{}
 	tasksMu sync.Mutex
@@ -102,6 +116,18 @@ var (
 
 	jobs *cron.Cron
 )
+
+func switchFeedRelay() {
+	relayMu.Lock()
+	defer relayMu.Unlock()
+
+	for {
+		feedIndex++
+		if feedRelays[feedIndex%len(feedRelays)].Enabled {
+			break
+		}
+	}
+}
 
 func doEntries(ev *nostr.Event) {
 	b, err := json.Marshal(ev)
@@ -158,8 +184,13 @@ func doEntries(ev *nostr.Event) {
 				log.Printf("%v: %v", name, err)
 				return
 			}
+			relayMu.Lock()
+			defer relayMu.Unlock()
 			for _, r := range postRelays {
-				relay, err := nostr.RelayConnect(context.Background(), r)
+				if !r.Enabled {
+					continue
+				}
+				relay, err := nostr.RelayConnect(context.Background(), r.Relay)
 				if err != nil {
 					log.Printf("%v: %v: %v", name, r, err)
 					continue
@@ -216,8 +247,13 @@ func reloadTasks(bundb *bun.DB) {
 				log.Printf("%v: %v", ct.Name, err)
 				return
 			}
+			relayMu.Lock()
+			defer relayMu.Unlock()
 			for _, r := range postRelays {
-				relay, err := nostr.RelayConnect(context.Background(), r)
+				if !r.Enabled {
+					continue
+				}
+				relay, err := nostr.RelayConnect(context.Background(), r.Relay)
 				if err != nil {
 					log.Printf("%v: %v: %v", ct.Name, r, err)
 					continue
@@ -241,6 +277,38 @@ func reloadTasks(bundb *bun.DB) {
 	defer tasksMu.Unlock()
 	tasks = ee
 	log.Printf("Reloaded %d tasks", len(ee))
+}
+
+func reloadFeedRelays(bundb *bun.DB) {
+	log.Printf("Reload feed relays")
+
+	var ee []FeedRelay
+	err := bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &ee)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	relayMu.Lock()
+	defer relayMu.Unlock()
+	feedRelays = ee
+	log.Printf("Reloaded %d feed relays", len(ee))
+}
+
+func reloadPostRelays(bundb *bun.DB) {
+	log.Printf("Reload post relays")
+
+	var ee []PostRelay
+	err := bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &ee)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	relayMu.Lock()
+	defer relayMu.Unlock()
+	postRelays = ee
+	log.Printf("Reloaded %d post relays", len(ee))
 }
 
 func reloadHooks(bundb *bun.DB) {
@@ -286,6 +354,20 @@ func server(from *time.Time) {
 	bundb := bun.NewDB(db, pgdialect.New())
 	defer bundb.Close()
 
+	_, err = bundb.NewCreateTable().Model((*FeedRelay)(nil)).IfNotExists().Exec(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	reloadFeedRelays(bundb)
+
+	_, err = bundb.NewCreateTable().Model((*PostRelay)(nil)).IfNotExists().Exec(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	reloadPostRelays(bundb)
+
 	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
 		log.Println(err)
@@ -301,9 +383,11 @@ func server(from *time.Time) {
 	reloadTasks(bundb)
 
 	log.Println("Connecting to relay")
-	relay, err := nostr.RelayConnect(context.Background(), feedRelays[feedIndex%len(feedRelays)])
+	relayMu.Lock()
+	relay, err := nostr.RelayConnect(context.Background(), feedRelays[feedIndex%len(feedRelays)].Relay)
+	relayMu.Unlock()
 	if err != nil {
-		feedIndex++
+		switchFeedRelay()
 		log.Println(err)
 		return
 	}
@@ -319,7 +403,7 @@ func server(from *time.Time) {
 	}}
 	sub, err := relay.Subscribe(context.Background(), filters)
 	if err != nil {
-		feedIndex++
+		switchFeedRelay()
 		log.Println(err)
 		return
 	}
@@ -346,7 +430,7 @@ func server(from *time.Time) {
 				retry = 0
 			case <-time.After(10 * time.Second):
 				if relay.ConnectionError != nil {
-					feedIndex++
+					switchFeedRelay()
 					log.Println(relay.ConnectionError)
 					close(events)
 					sub.Unsub()
@@ -355,7 +439,7 @@ func server(from *time.Time) {
 				retry++
 				log.Println("Health check", retry)
 				if retry > 60 {
-					feedIndex++
+					switchFeedRelay()
 					close(events)
 					sub.Unsub()
 					break events_loop
@@ -597,9 +681,16 @@ func manager() {
 		return c.JSON(http.StatusOK, c.Param("name"))
 	})
 
+	e.GET("/reload", func(c echo.Context) error {
+		reloadFeedRelays(bundb)
+		reloadPostRelays(bundb)
+		return c.JSON(http.StatusOK, "OK")
+	})
 	e.GET("/info", func(c echo.Context) error {
+		relayMu.Lock()
+		defer relayMu.Unlock()
 		info := Info{
-			Relay:   feedRelays[feedIndex%len(feedRelays)],
+			Relay:   feedRelays[feedIndex%len(feedRelays)].Relay,
 			Version: version,
 		}
 		return c.JSON(http.StatusOK, info)
