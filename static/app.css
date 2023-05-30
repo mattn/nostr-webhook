@@ -51,7 +51,7 @@ table tr:hover{
 }
 
 table th, table td{
-  text-align: center;
+  /*text-align: center;*/
   width: 20%;
   padding: 15px 0;
   overflow: hidden;
