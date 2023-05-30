@@ -190,16 +190,20 @@ func doEntries(ev *nostr.Event) {
 				if !r.Enabled {
 					continue
 				}
-				relay, err := nostr.RelayConnect(context.Background(), r.Relay)
-				if err != nil {
-					log.Printf("%v: %v: %v", name, r, err)
-					continue
+				for i := 0; i < 3; i++ {
+					relay, err := nostr.RelayConnect(context.Background(), r.Relay)
+					if err != nil {
+						log.Printf("%v: %v: %v", name, r, err)
+						continue
+					}
+					_, err = relay.Publish(context.Background(), eev)
+					relay.Close()
+					if err != nil {
+						log.Printf("%v: %v: %v", name, r, err)
+						continue
+					}
+					break
 				}
-				_, err = relay.Publish(context.Background(), eev)
-				if err != nil {
-					log.Printf("%v: %v: %v", name, r, err)
-				}
-				relay.Close()
 			}
 		}(req, entry.Name)
 	}
@@ -253,16 +257,20 @@ func reloadTasks(bundb *bun.DB) {
 				if !r.Enabled {
 					continue
 				}
-				relay, err := nostr.RelayConnect(context.Background(), r.Relay)
-				if err != nil {
-					log.Printf("%v: %v: %v", ct.Name, r, err)
-					continue
+				for i := 0; i < 3; i++ {
+					relay, err := nostr.RelayConnect(context.Background(), r.Relay)
+					if err != nil {
+						log.Printf("%v: %v: %v", ct.Name, r, err)
+						continue
+					}
+					_, err = relay.Publish(context.Background(), eev)
+					relay.Close()
+					if err != nil {
+						log.Printf("%v: %v: %v", ct.Name, r, err)
+						continue
+					}
+					break
 				}
-				_, err = relay.Publish(context.Background(), eev)
-				if err != nil {
-					log.Printf("%v: %v: %v", ct.Name, r, err)
-				}
-				relay.Close()
 			}
 		})
 		if err != nil {
