@@ -165,6 +165,7 @@ func doEntries(ev *nostr.Event) {
 			continue
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
+		req.Header.Set("Accept", "application/json")
 		go func(req *http.Request, name string) {
 			client := new(http.Client)
 			client.Timeout = 15 * time.Second
@@ -233,6 +234,7 @@ func reloadTasks(bundb *bun.DB) {
 				return
 			}
 			req.Header.Set("Authorization", "Bearer "+ct.Secret)
+			req.Header.Set("Accept", "application/json")
 			client := new(http.Client)
 			client.Timeout = 15 * time.Second
 			resp, err := client.Do(req)
