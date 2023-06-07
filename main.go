@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -497,6 +498,14 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
+	hook.Name = strings.TrimSpace(hook.Name)
+	hook.Description = strings.TrimSpace(hook.Description)
+	hook.Author = strings.TrimSpace(hook.Author)
+	hook.Pattern = strings.TrimSpace(hook.Pattern)
+	hook.MentionTo = strings.TrimSpace(hook.MentionTo)
+	hook.Endpoint = strings.TrimSpace(hook.Endpoint)
+	hook.Secret = strings.TrimSpace(hook.Secret)
+
 	if hook.Name == "" {
 		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
 	}
@@ -508,6 +517,9 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	if hook.Pattern == "" {
+		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
 	}
 	if _, err := regexp.Compile(hook.Pattern); err != nil {
 		log.Println(err)
@@ -531,6 +543,12 @@ func checkTask(c echo.Context, task *Task) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
+	task.Name = strings.TrimSpace(task.Name)
+	task.Description = strings.TrimSpace(task.Description)
+	task.Author = strings.TrimSpace(task.Author)
+	task.Endpoint = strings.TrimSpace(task.Endpoint)
+	task.Secret = strings.TrimSpace(task.Secret)
+
 	if task.Name == "" {
 		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
 	}
