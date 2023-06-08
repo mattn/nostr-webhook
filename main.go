@@ -606,7 +606,7 @@ func manager() {
 	})
 	e.GET("/hooks/:name", func(c echo.Context) error {
 		var hook Hook
-		err := bundb.NewSelect().Model((*Hook)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &hook)
+		err := bundb.NewSelect().Model((*Hook)(nil)).Where("name = ?", c.Param("name")).Scan(context.Background(), &hook)
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -663,7 +663,7 @@ func manager() {
 	})
 	e.GET("/tasks/:name", func(c echo.Context) error {
 		var task Task
-		err := bundb.NewSelect().Model((*Task)(nil)).Order("created_at").Limit(1).Scan(context.Background(), &task)
+		err := bundb.NewSelect().Model((*Task)(nil)).Where("name = ?", c.Param("name")).Scan(context.Background(), &task)
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
