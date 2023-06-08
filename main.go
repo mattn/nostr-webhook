@@ -156,7 +156,7 @@ func doEntries(ev *nostr.Event) {
 				}
 			}
 			if !found {
-				return
+				continue
 			}
 		}
 		log.Printf("%v: Matched entry", entry.Name)
