@@ -77,6 +77,7 @@ type Hook struct {
 	Author      string    `bun:"author,notnull" json:"author"`
 	Pattern     string    `bun:"pattern,notnull" json:"pattern"`
 	MentionTo   string    `bun:"mention_to,notnull" json:"mention_to"`
+	MentionFrom string    `bun:"mention_from,notnull" json:"mention_from"`
 	Endpoint    string    `bun:"endpoint,notnull" json:"endpoint"`
 	Secret      string    `bun:"secret,notnull,default:random_string(12)" json:"secret"`
 	Enabled     bool      `bun:"enabled,default:false" json:"enabled"`
@@ -156,6 +157,13 @@ func doEntries(ev *nostr.Event) {
 				}
 			}
 			if !found {
+				continue
+			}
+		}
+		if entry.MentionFrom != "" {
+			if pub, err := nip19.EncodePublicKey(ev.PubKey); err != nil {
+				continue
+			} else if pub != entry.MentionFrom {
 				continue
 			}
 		}
