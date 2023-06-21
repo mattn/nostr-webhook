@@ -131,6 +131,48 @@ func switchFeedRelay() {
 	}
 }
 
+func doReq(req *http.Request, name string) {
+	client := new(http.Client)
+	client.Timeout = 15 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
+		return
+	}
+	var eev nostr.Event
+	err = json.NewDecoder(resp.Body).Decode(&eev)
+	if err != nil {
+		log.Printf("%v: %v", name, err)
+		return
+	}
+	relayMu.Lock()
+	defer relayMu.Unlock()
+	for _, r := range postRelays {
+		if !r.Enabled {
+			continue
+		}
+		for i := 0; i < 3; i++ {
+			relay, err := nostr.RelayConnect(context.Background(), r.Relay)
+			if err != nil {
+				log.Printf("%v: %v: %v", name, r, err)
+				continue
+			}
+			_, err = relay.Publish(context.Background(), eev)
+			relay.Close()
+			if err != nil {
+				log.Printf("%v: %v: %v", name, r, err)
+				continue
+			}
+			break
+		}
+	}
+}
+
 func doEntries(ev *nostr.Event) {
 	b, err := json.Marshal(ev)
 	if err != nil {
@@ -175,47 +217,7 @@ func doEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go func(req *http.Request, name string) {
-			client := new(http.Client)
-			client.Timeout = 15 * time.Second
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
-				return
-			}
-			var eev nostr.Event
-			err = json.NewDecoder(resp.Body).Decode(&eev)
-			if err != nil {
-				log.Printf("%v: %v", name, err)
-				return
-			}
-			relayMu.Lock()
-			defer relayMu.Unlock()
-			for _, r := range postRelays {
-				if !r.Enabled {
-					continue
-				}
-				for i := 0; i < 3; i++ {
-					relay, err := nostr.RelayConnect(context.Background(), r.Relay)
-					if err != nil {
-						log.Printf("%v: %v: %v", name, r, err)
-						continue
-					}
-					_, err = relay.Publish(context.Background(), eev)
-					relay.Close()
-					if err != nil {
-						log.Printf("%v: %v: %v", name, r, err)
-						continue
-					}
-					break
-				}
-			}
-		}(req, entry.Name)
+		go doReq(req, entry.Name)
 	}
 }
 
