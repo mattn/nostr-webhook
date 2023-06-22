@@ -152,25 +152,34 @@ func doReq(req *http.Request, name string) {
 	}
 	relayMu.Lock()
 	defer relayMu.Unlock()
+
+	var wg sync.WaitGroup
 	for _, r := range postRelays {
 		if !r.Enabled {
 			continue
 		}
-		for i := 0; i < 3; i++ {
-			relay, err := nostr.RelayConnect(context.Background(), r.Relay)
-			if err != nil {
-				log.Printf("%v: %v: %v", name, r, err)
-				continue
+		r := r
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 3; i++ {
+				relay, err := nostr.RelayConnect(context.Background(), r.Relay)
+				if err != nil {
+					log.Printf("%v: %v: %v", name, r, err)
+					continue
+				}
+				_, err = relay.Publish(context.Background(), eev)
+				relay.Close()
+				if err != nil {
+					log.Printf("%v: %v: %v", name, r, err)
+					continue
+				}
+				break
 			}
-			_, err = relay.Publish(context.Background(), eev)
-			relay.Close()
-			if err != nil {
-				log.Printf("%v: %v: %v", name, r, err)
-				continue
-			}
-			break
-		}
+		}()
 	}
+	wg.Wait()
 }
 
 func doEntries(ev *nostr.Event) {
