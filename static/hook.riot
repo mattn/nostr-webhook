@@ -3,6 +3,7 @@
 
   <table>
     <tr>
+      <th>-</th>
       <th>Name</th>
       <th>Mention To</th>
       <th>Pattern</th>
@@ -10,10 +11,11 @@
       <th>-</th>
     </tr>
     <tr each={ item in state.items } class={ item.enabled ? null : 'disabled' }>
+      <td style='max-width: 40px'><img class="icon" src={ icon(item) }/></td>
       <td>{ item.name }</td>
       <td style='max-width: 100px'>{ item.mention_to }</td>
-      <td>{ item.pattern }</td>
-      <td>{ item.endpoint }</td>
+      <td style='max-width: 200px'>{ item.pattern }</td>
+      <td style='max-width: 200px'>{ item.endpoint }</td>
       <td><button onclick={() => modify(item)}>Edit</button></td>
     </tr>
   </table>
@@ -41,6 +43,9 @@
       },
       modify(item) {
         riot.mount('hook-modal', {item: item, create: false, parent: this})
+      },
+      icon(item) {
+        return 'https://www.gravatar.com/avatar/' + CybozuLabs.MD5.calc(item.author)
       }
     }
   </script>

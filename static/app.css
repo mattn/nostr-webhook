@@ -52,7 +52,6 @@ table tr:hover{
 
 table th, table td{
   /*text-align: center;*/
-  width: 20%;
   padding: 15px 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -148,4 +147,8 @@ p.message-text {
 
 .secret {
   color: #444;
+}
+
+.icon {
+  width: 30px;
 }
