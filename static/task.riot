@@ -3,12 +3,14 @@
 
   <table>
     <tr>
+      <th>-</th>
       <th>Name</th>
       <th>Spec</th>
       <th>Endpoint</th>
       <th>-</th>
     </tr>
     <tr each={ item in state.items } class={ item.enabled ? null : 'disabled' }>
+      <td style='max-width: 40px'><img class="icon" src={ icon(item) }/></td>
       <td>{ item.name }</td>
       <td>{ item.spec }</td>
       <td>{ item.endpoint }</td>
@@ -39,6 +41,9 @@
       },
       modify(item) {
         riot.mount('task-modal', {item: item, create: false, parent: this})
+      },
+      icon(item) {
+        return 'https://www.gravatar.com/avatar/' + CybozuLabs.MD5.calc(item.author)
       }
     }
   </script>
