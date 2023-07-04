@@ -131,24 +131,24 @@ func switchFeedRelay() {
 	}
 }
 
-func doReq(req *http.Request, name string) {
+func doReqOnce(req *http.Request, name string) bool {
 	client := new(http.Client)
 	client.Timeout = 15 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
-		return
+		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
-		return
+		return false
 	}
 	var eev nostr.Event
 	err = json.NewDecoder(resp.Body).Decode(&eev)
 	if err != nil {
 		log.Printf("%v: %v", name, err)
-		return
+		return false
 	}
 	relayMu.Lock()
 	defer relayMu.Unlock()
@@ -180,6 +180,15 @@ func doReq(req *http.Request, name string) {
 		}()
 	}
 	wg.Wait()
+	return true
+}
+
+func doReq(req *http.Request, name string) {
+	for i := 0; i < 3; i++ {
+		if doReqOnce(req, name) {
+			return
+		}
+	}
 }
 
 func doEntries(ev *nostr.Event) {
