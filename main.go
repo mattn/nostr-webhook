@@ -793,7 +793,6 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		e.Logger.Error(name)
 		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("user = ?", name).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
@@ -815,7 +814,7 @@ func manager() {
 		reloadProxies(bundb)
 		return c.JSON(http.StatusOK, proxy)
 	})
-	e.POST("/proxy/post", func(c echo.Context) error {
+	e.POST("/post", func(c echo.Context) error {
 		user, password, ok := c.Request().BasicAuth()
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
