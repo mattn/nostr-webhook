@@ -788,12 +788,13 @@ func manager() {
 
 	e.GET("/proxy", func(c echo.Context) error {
 		var proxy Proxy
-		if user, err := jwtUser(c); err == nil {
-			proxy.User = user
+		if name, err := jwtUser(c); err == nil {
+			proxy.User = name
 		} else {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		e.Logger.Error(proxy.User)
 		err := bundb.NewSelect().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
