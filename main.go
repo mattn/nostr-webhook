@@ -806,12 +806,8 @@ func manager() {
 		if ok, err := checkProxy(c, &proxy); !ok {
 			return err
 		}
-		_, err := bundb.NewDelete().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Exec(context.Background())
-		if err != nil {
-			e.Logger.Error(err)
-			return c.JSON(http.StatusInternalServerError, err.Error())
-		}
-		_, err = bundb.NewInsert().Model(&proxy).Exec(context.Background())
+		bundb.NewDelete().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Exec(context.Background())
+		_, err := bundb.NewInsert().Model(&proxy).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
