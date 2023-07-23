@@ -640,15 +640,6 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	proxy.User = strings.TrimSpace(proxy.User)
-	proxy.Password = strings.TrimSpace(proxy.Password)
-
-	if proxy.User == "" {
-		return false, c.JSON(http.StatusBadRequest, "User must not be empty")
-	}
-	if proxy.Password == "" {
-		return false, c.JSON(http.StatusBadRequest, "Password must not be empty")
-	}
 	if name, err := jwtUser(c); err == nil {
 		proxy.User = name
 	} else {
