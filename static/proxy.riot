@@ -1,7 +1,8 @@
 <proxy>
   <h3><a href="/">{ props.title }</a></h3>
 
-  <span>{ state.item.password }</span>
+  <p>User: <span>{ state.item.name }</span></p>
+  <p>Password: <span>{ state.item.password }</span>
   <button onclick={() => create()}>New</button>
 
   <script>
