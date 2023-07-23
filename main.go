@@ -106,7 +106,7 @@ type Task struct {
 type Proxy struct {
 	bun.BaseModel `bun:"table:proxy,alias:p"`
 
-	User      string    `bun:"user,pk,notnull" json:"user"`
+	Name      string    `bun:"name,pk,notnull" json:"name"`
 	Password  string    `bun:"password,notnull,default:random_string(12)" json:"password"`
 	Enabled   bool      `bun:"enabled,notnull,default:false" json:"enabled"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
@@ -641,7 +641,7 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
 	if name, err := jwtUser(c); err == nil {
-		proxy.User = name
+		proxy.Name = name
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
@@ -793,7 +793,7 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("user = ?", name).Scan(context.Background(), &proxy)
+		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", name).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
@@ -805,7 +805,7 @@ func manager() {
 		if ok, err := checkProxy(c, &proxy); !ok {
 			return err
 		}
-		bundb.NewDelete().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Exec(context.Background())
+		bundb.NewDelete().Model((*Proxy)(nil)).Where("name = ?", proxy.Name).Exec(context.Background())
 		_, err := bundb.NewInsert().Model(&proxy).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
@@ -815,7 +815,7 @@ func manager() {
 		return c.JSON(http.StatusOK, proxy)
 	})
 	e.POST("/post", func(c echo.Context) error {
-		user, password, ok := c.Request().BasicAuth()
+		name, password, ok := c.Request().BasicAuth()
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
 		}
@@ -824,7 +824,7 @@ func manager() {
 		defer proxiesMu.Unlock()
 		ok = false
 		for _, p := range proxies {
-			if p.User == user && p.Password == password && p.Enabled {
+			if p.Name == name && p.Password == password && p.Enabled {
 				ok = true
 				break
 			}
