@@ -1,0 +1,41 @@
+<proxy>
+  <h3><a href="/">{ props.title }</a></h3>
+
+  <span>{ state.item.password }</span>
+  <button onclick={() => create()}>New</button>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          item: props.item,
+        }
+        this.reload();
+      },
+      reload() {
+        riot.mount('loading', {message: 'Loading...'})
+        const reloader = async () => {
+          this.update({item: await (await fetch('/proxy')).json()})
+          riot.unmount('loading', true)
+        }
+        reloader();
+      },
+      create() {
+          alert(1)
+        fetch('/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '',
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            if (typeof json === 'string') throw new Error(json)
+            this.state.item = json
+          })
+          .catch((err) => {
+            riot.mount('message', {message: err, onOK: () => {}})
+          })
+      }
+    }
+  </script>
+</proxy>

@@ -102,6 +102,16 @@ type Task struct {
 	id cron.EntryID
 }
 
+// Proxy is struct for proxy
+type Proxy struct {
+	bun.BaseModel `bun:"table:proxy,alias:p"`
+
+	User      string    `bun:"user,pk,notnull" json:"user"`
+	Password  string    `bun:"password,notnull,default:random_string(12)" json:"password"`
+	Enabled   bool      `bun:"enabled,notnull,default:false" json:"enabled"`
+	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // Info is struct for /info
 type Info struct {
 	Relay   string `json:"relay"`
@@ -111,10 +121,12 @@ type Info struct {
 var (
 	relayMu sync.Mutex
 
-	hooksMu sync.Mutex
-	hooks   = []Hook{}
-	tasksMu sync.Mutex
-	tasks   = []Task{}
+	hooksMu   sync.Mutex
+	hooks     = []Hook{}
+	tasksMu   sync.Mutex
+	tasks     = []Task{}
+	proxiesMu sync.Mutex
+	proxies   = []Proxy{}
 
 	jobs *cron.Cron
 )
@@ -381,6 +393,22 @@ func reloadHooks(bundb *bun.DB) {
 	log.Printf("Reloaded %d hooks", len(ee))
 }
 
+func reloadProxies(bundb *bun.DB) {
+	log.Printf("Reload proxies")
+
+	var ee []Proxy
+	err := bundb.NewSelect().Model((*Proxy)(nil)).Scan(context.Background(), &ee)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	proxiesMu.Lock()
+	defer proxiesMu.Unlock()
+	proxies = ee
+	log.Printf("Reloaded %d proxies", len(ee))
+}
+
 func server(from *time.Time) {
 	enc := json.NewEncoder(os.Stdout)
 
@@ -420,6 +448,13 @@ func server(from *time.Time) {
 		return
 	}
 	reloadTasks(bundb)
+
+	_, err = bundb.NewCreateTable().Model((*Proxy)(nil)).IfNotExists().Exec(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	reloadProxies(bundb)
 
 	log.Println("Connecting to relay")
 	relayMu.Lock()
@@ -600,6 +635,29 @@ func checkTask(c echo.Context, task *Task) (bool, error) {
 	return true, nil
 }
 
+func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
+	if err := c.Bind(&proxy); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	proxy.User = strings.TrimSpace(proxy.User)
+	proxy.Password = strings.TrimSpace(proxy.Password)
+
+	if proxy.User == "" {
+		return false, c.JSON(http.StatusBadRequest, "User must not be empty")
+	}
+	if proxy.Password == "" {
+		return false, c.JSON(http.StatusBadRequest, "Password must not be empty")
+	}
+	if name, err := jwtUser(c); err == nil {
+		proxy.User = name
+	} else {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	return true, nil
+}
+
 func manager() {
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -735,6 +793,96 @@ func manager() {
 		}
 		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, c.Param("name"))
+	})
+
+	e.GET("/proxy", func(c echo.Context) error {
+		var proxy Proxy
+		if user, err := jwtUser(c); err == nil {
+			proxy.User = user
+		} else {
+			log.Println(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		err := bundb.NewSelect().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Scan(context.Background(), &proxy)
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, proxy)
+	})
+	e.POST("/proxy", func(c echo.Context) error {
+		var proxy Proxy
+		if ok, err := checkProxy(c, &proxy); !ok {
+			return err
+		}
+		_, err := bundb.NewDelete().Model((*Proxy)(nil)).Where("user = ?", proxy.User).Exec(context.Background())
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		_, err = bundb.NewInsert().Model(&proxy).Exec(context.Background())
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		reloadProxies(bundb)
+		return c.JSON(http.StatusOK, proxy)
+	})
+	e.POST("/proxy/post", func(c echo.Context) error {
+		user, password, ok := c.Request().BasicAuth()
+		if !ok {
+			return c.JSON(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		}
+
+		proxiesMu.Lock()
+		defer proxiesMu.Unlock()
+		ok = false
+		for _, p := range proxies {
+			if p.User == user && p.Password == password && p.Enabled {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return c.JSON(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		}
+
+		var eev nostr.Event
+		err := json.NewDecoder(c.Request().Body).Decode(&eev)
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		relayMu.Lock()
+		defer relayMu.Unlock()
+
+		var wg sync.WaitGroup
+		for _, r := range postRelays {
+			if !r.Enabled {
+				continue
+			}
+			r := r
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 3; i++ {
+					relay, err := nostr.RelayConnect(context.Background(), r.Relay)
+					if err != nil {
+						log.Printf("%v: %v: %v", name, r, err)
+						continue
+					}
+					_, err = relay.Publish(context.Background(), eev)
+					relay.Close()
+					if err != nil {
+						log.Printf("%v: %v: %v", name, r, err)
+						continue
+					}
+					break
+				}
+			}()
+		}
+		return c.JSON(http.StatusCreated, "")
 	})
 
 	e.GET("/reload", func(c echo.Context) error {
