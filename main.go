@@ -557,7 +557,7 @@ func jwtName(c echo.Context) (string, error) {
 	if !ok {
 		return "unknown", nil
 	}
-	req, err := http.NewRequest(http.MethodPost, iss.(string), nil)
+	req, err := http.NewRequest(http.MethodGet, iss.(string)+"/cdn-cgi/access/get-identity", nil)
 	if err != nil {
 		return "", err
 	}
