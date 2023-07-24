@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -641,7 +642,8 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
 	if name, err := jwtUser(c); err == nil {
-		proxy.Name = name
+		hash := md5.Sum([]byte(name))
+		proxy.Name = string(hash[:])
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
@@ -793,7 +795,8 @@ func manager() {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", name).Scan(context.Background(), &proxy)
+		hash := md5.Sum([]byte(name))
+		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", string(hash[:])).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
