@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -540,10 +539,52 @@ loop:
 	log.Println("Stopped")
 }
 
-func jwtUser(c echo.Context) (string, error) {
+func jwtName(c echo.Context) (string, error) {
 	cookie, err := c.Request().Cookie("CF_Authorization")
 	if err != nil {
+		return "", nil
+	}
+
+	claims := jwt.MapClaims{}
+	parser := new(jwt.Parser)
+	_, _, err = parser.ParseUnverified(cookie.Value, &claims)
+	if err != nil {
+		return "", err
+	}
+	b, _ := json.Marshal(map[string]interface{}(claims))
+	log.Println(string(b))
+	iss, ok := map[string]interface{}(claims)["iss"]
+	if !ok {
 		return "unknown", nil
+	}
+	req, err := http.NewRequest(http.MethodPost, iss.(string), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Cookie", "CF_Authorization="+cookie.Value)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(&claims)
+	if err != nil {
+		return "", err
+	}
+
+	name, ok := map[string]interface{}(claims)["name"]
+	if !ok {
+		return "unknown", nil
+	}
+
+	return name.(string), nil
+}
+
+func jwtEmail(c echo.Context) (string, error) {
+	cookie, err := c.Request().Cookie("CF_Authorization")
+	if err != nil {
+		return "", err
 	}
 
 	claims := jwt.MapClaims{}
@@ -579,8 +620,8 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if hook.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if name, err := jwtUser(c); err == nil {
-		hook.Author = name
+	if email, err := jwtEmail(c); err == nil {
+		hook.Author = email
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
@@ -622,8 +663,8 @@ func checkTask(c echo.Context, task *Task) (bool, error) {
 	if task.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if name, err := jwtUser(c); err == nil {
-		task.Author = name
+	if email, err := jwtEmail(c); err == nil {
+		task.Author = email
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
@@ -644,9 +685,14 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if name, err := jwtUser(c); err == nil {
-		proxy.Name = fmt.Sprintf("%x", md5.Sum([]byte(name)))
-		proxy.Author = name
+	if email, err := jwtEmail(c); err == nil {
+		proxy.Author = email
+	} else {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	if name, err := jwtName(c); err == nil {
+		proxy.Name = name
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
@@ -793,12 +839,11 @@ func manager() {
 
 	e.GET("/proxy", func(c echo.Context) error {
 		var proxy Proxy
-		name, err := jwtUser(c)
+		name, err := jwtName(c)
 		if err != nil {
 			log.Println(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
-		name = fmt.Sprintf("%x", md5.Sum([]byte(name)))
 		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", name).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
