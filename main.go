@@ -109,6 +109,7 @@ type Proxy struct {
 
 	Name      string    `bun:"name,pk,notnull" json:"name"`
 	Password  string    `bun:"password,notnull,default:random_string(12)" json:"password"`
+	Author    string    `bun:"author,notnull" json:"author"`
 	Enabled   bool      `bun:"enabled,notnull,default:true" json:"enabled"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 }
@@ -643,6 +644,7 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 	}
 	if name, err := jwtUser(c); err == nil {
 		proxy.Name = fmt.Sprintf("%x", md5.Sum([]byte(name)))
+		proxy.Author = name
 	} else {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
