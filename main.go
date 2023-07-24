@@ -552,6 +552,8 @@ func jwtUser(c echo.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	b, _ := json.Marshal(map[string]interface{}(claims))
+	log.Println(string(b))
 	if email, ok := map[string]interface{}(claims)["email"]; ok {
 		return email.(string), nil
 	}
