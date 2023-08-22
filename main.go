@@ -471,6 +471,8 @@ func server(from *time.Time) {
 	log.Println("Connected to relay")
 
 	events := make(chan *nostr.Event, 100)
+	defer close(events)
+
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
 		Kinds: []int{nostr.KindTextNote},
@@ -487,6 +489,7 @@ func server(from *time.Time) {
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
 		defer wg.Done()
+		defer sub.Unsub()
 
 		retry := 0
 		log.Println("Start")
@@ -507,16 +510,12 @@ func server(from *time.Time) {
 				if relay.ConnectionError != nil {
 					switchFeedRelay()
 					log.Println(relay.ConnectionError)
-					close(events)
-					sub.Unsub()
 					break events_loop
 				}
 				retry++
 				log.Println("Health check", retry)
 				if retry > 60 {
 					switchFeedRelay()
-					close(events)
-					sub.Unsub()
 					break events_loop
 				}
 			}
