@@ -144,7 +144,7 @@ func switchFeedRelay() {
 	}
 }
 
-func doReqOnce(req *http.Request, name string) bool {
+func doReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	client := new(http.Client)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
@@ -163,6 +163,11 @@ func doReqOnce(req *http.Request, name string) bool {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
+	if eev.Kind != ev.Kind {
+		log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
+		return false
+	}
+
 	relayMu.Lock()
 	defer relayMu.Unlock()
 
@@ -196,9 +201,9 @@ func doReqOnce(req *http.Request, name string) bool {
 	return true
 }
 
-func doReq(req *http.Request, name string) {
+func doReq(req *http.Request, name string, ev *nostr.Event) {
 	for i := 0; i < 3; i++ {
-		if doReqOnce(req, name) {
+		if doReqOnce(req, name, ev) {
 			return
 		}
 	}
@@ -248,7 +253,7 @@ func doEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doReq(req, entry.Name)
+		go doReq(req, entry.Name, ev)
 	}
 }
 
@@ -475,7 +480,7 @@ func server(from *time.Time) {
 
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
-		Kinds: []int{nostr.KindTextNote},
+		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage},
 		Since: &timestamp,
 	}}
 	sub, err := relay.Subscribe(context.Background(), filters)
