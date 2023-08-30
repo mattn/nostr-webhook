@@ -165,7 +165,7 @@ func doReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
-	if eev.Kind != ev.Kind {
+	if (eev.Kind == 1 || eev.Kind == 42) && eev.Kind != ev.Kind {
 		log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
 		return false
 	}
