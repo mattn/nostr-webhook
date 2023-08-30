@@ -130,6 +130,8 @@ var (
 	proxies   = []Proxy{}
 
 	jobs *cron.Cron
+
+	reNormalize = regexp.MustCompile(`\bnostr:\w\+\b`)
 )
 
 func switchFeedRelay() {
@@ -221,7 +223,9 @@ func doEntries(ev *nostr.Event) {
 		if !entry.Enabled {
 			continue
 		}
-		if !entry.re.MatchString(ev.Content) {
+		content := ev.Content
+		content = reNormalize.ReplaceAllString(content, "")
+		if !entry.re.MatchString(content) {
 			continue
 		}
 		if entry.MentionTo != "" {
