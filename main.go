@@ -131,7 +131,7 @@ var (
 
 	jobs *cron.Cron
 
-	reNormalize = regexp.MustCompile(`\bnostr:\w\+\b`)
+	reNormalize = regexp.MustCompile(`\bnostr:\w+\b`)
 )
 
 func switchFeedRelay() {
