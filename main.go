@@ -224,7 +224,7 @@ func doEntries(ev *nostr.Event) {
 			continue
 		}
 		content := ev.Content
-		content = reNormalize.ReplaceAllString(content, "")
+		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
 		if !entry.re.MatchString(content) {
 			continue
 		}
