@@ -489,7 +489,7 @@ func server(from *time.Time) {
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
 		defer wg.Done()
-		defer sub.Unsub()
+		defer sub.Close()
 
 		retry := 0
 		log.Println("Start")
