@@ -493,12 +493,12 @@ func server(from *time.Time) {
 		log.Println(err)
 		return
 	}
+	defer sub.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
 		defer wg.Done()
-		defer sub.Close()
 
 		retry := 0
 		log.Println("Start")
@@ -529,6 +529,7 @@ func server(from *time.Time) {
 				}
 			}
 		}
+		sub.Events <- nil
 		log.Println("Finish")
 	}(&wg, events)
 
