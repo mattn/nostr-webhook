@@ -164,25 +164,7 @@ func switchFeedRelay() {
 	}
 }
 
-func doWatchReq(req *http.Request, name string, ev *nostr.Event) {
-	client := new(http.Client)
-	for i := 0; i < 3; i++ {
-		client.Timeout = 30 * time.Second
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		resp.Body.Close()
-		if resp.StatusCode != 200 {
-			log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
-			continue
-		}
-		break
-	}
-}
-
-func doHookReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
+func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	client := new(http.Client)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
@@ -239,9 +221,9 @@ func doHookReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	return true
 }
 
-func doHookReq(req *http.Request, name string, ev *nostr.Event) {
+func doHttpReq(req *http.Request, name string, ev *nostr.Event) {
 	for i := 0; i < 3; i++ {
-		if doHookReqOnce(req, name, ev) {
+		if doHttpReqOnce(req, name, ev) {
 			return
 		}
 	}
@@ -272,7 +254,7 @@ func doWatchEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doWatchReq(req, entry.Name, ev)
+		go doHttpReq(req, entry.Name, ev)
 	}
 }
 
@@ -322,7 +304,7 @@ func doHookEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doHookReq(req, entry.Name, ev)
+		go doHttpReq(req, entry.Name, ev)
 	}
 }
 
