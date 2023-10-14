@@ -183,7 +183,7 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
-	if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && eev.Kind != ev.Kind {
+	if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindSetMetadata) {
 		log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
 		return false
 	}
