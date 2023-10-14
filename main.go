@@ -86,6 +86,22 @@ type Hook struct {
 	re *regexp.Regexp
 }
 
+// Watch is struct for webhook
+type Watch struct {
+	bun.BaseModel `bun:"table:watch,alias:w"`
+
+	Name        string    `bun:"name,pk,notnull" json:"name"`
+	Description string    `bun:"description,notnull" json:"description"`
+	Author      string    `bun:"author,notnull" json:"author"`
+	Pattern     string    `bun:"pattern,notnull" json:"pattern"`
+	Endpoint    string    `bun:"endpoint,notnull" json:"endpoint"`
+	Secret      string    `bun:"secret,notnull,default:random_string(12)" json:"secret"`
+	Enabled     bool      `bun:"enabled,default:false" json:"enabled"`
+	CreatedAt   time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
+
+	re *regexp.Regexp
+}
+
 // Task is struct for cronjob
 type Task struct {
 	bun.BaseModel `bun:"table:task,alias:t"`
@@ -122,6 +138,8 @@ type Info struct {
 var (
 	relayMu sync.Mutex
 
+	watchesMu sync.Mutex
+	watches   = []Watch{}
 	hooksMu   sync.Mutex
 	hooks     = []Hook{}
 	tasksMu   sync.Mutex
@@ -146,7 +164,25 @@ func switchFeedRelay() {
 	}
 }
 
-func doReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
+func doWatchReq(req *http.Request, name string, ev *nostr.Event) {
+	client := new(http.Client)
+	for i := 0; i < 3; i++ {
+		client.Timeout = 30 * time.Second
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
+			continue
+		}
+		break
+	}
+}
+
+func doHookReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	client := new(http.Client)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
@@ -203,15 +239,44 @@ func doReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	return true
 }
 
-func doReq(req *http.Request, name string, ev *nostr.Event) {
+func doHookReq(req *http.Request, name string, ev *nostr.Event) {
 	for i := 0; i < 3; i++ {
-		if doReqOnce(req, name, ev) {
+		if doHookReqOnce(req, name, ev) {
 			return
 		}
 	}
 }
 
-func doEntries(ev *nostr.Event) {
+func doWatchEntries(ev *nostr.Event) {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	watchesMu.Lock()
+	defer watchesMu.Unlock()
+	for _, entry := range watches {
+		if !entry.Enabled {
+			continue
+		}
+		content := ev.Content
+		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
+		if !entry.re.MatchString(content) {
+			continue
+		}
+		log.Printf("%v: Matched Watch entry", entry.Name)
+		req, err := http.NewRequest(http.MethodPost, entry.Endpoint, bytes.NewReader(b))
+		if err != nil {
+			log.Printf("%v: %v", entry.Name, err)
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+entry.Secret)
+		req.Header.Set("Accept", "application/json")
+		go doWatchReq(req, entry.Name, ev)
+	}
+}
+
+func doHookEntries(ev *nostr.Event) {
 	b, err := json.Marshal(ev)
 	if err != nil {
 		log.Println(err)
@@ -249,7 +314,7 @@ func doEntries(ev *nostr.Event) {
 				continue
 			}
 		}
-		log.Printf("%v: Matched entry", entry.Name)
+		log.Printf("%v: Matched Hook entry", entry.Name)
 		req, err := http.NewRequest(http.MethodPost, entry.Endpoint, bytes.NewReader(b))
 		if err != nil {
 			log.Printf("%v: %v", entry.Name, err)
@@ -257,7 +322,7 @@ func doEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doReq(req, entry.Name, ev)
+		go doHookReq(req, entry.Name, ev)
 	}
 }
 
@@ -372,6 +437,30 @@ func reloadPostRelays(bundb *bun.DB) {
 	log.Printf("Reloaded %d post relays", len(ee))
 }
 
+func reloadWatches(bundb *bun.DB) {
+	log.Printf("Reload watches")
+
+	var ee []Watch
+	err := bundb.NewSelect().Model((*Watch)(nil)).Scan(context.Background(), &ee)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	for i := range ee {
+		if ee[i].Pattern != "" {
+			ee[i].re, err = regexp.Compile(ee[i].Pattern)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	watchesMu.Lock()
+	defer watchesMu.Unlock()
+	watches = ee
+	log.Printf("Reloaded %d watches", len(ee))
+}
+
 func reloadHooks(bundb *bun.DB) {
 	log.Printf("Reload hooks")
 
@@ -452,6 +541,13 @@ func server(from *time.Time) {
 	}
 	reloadHooks(bundb)
 
+	_, err = bundb.NewCreateTable().Model((*Watch)(nil)).IfNotExists().Exec(context.Background())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	reloadWatches(bundb)
+
 	_, err = bundb.NewCreateTable().Model((*Task)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
 		log.Println(err)
@@ -484,7 +580,7 @@ func server(from *time.Time) {
 
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
-		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage},
+		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindSetMetadata},
 		Since: &timestamp,
 	}}
 	sub, err := relay.Subscribe(context.Background(), filters)
@@ -510,7 +606,12 @@ func server(from *time.Time) {
 					break events_loop
 				}
 				enc.Encode(ev)
-				doEntries(ev)
+				switch ev.Kind {
+				case nostr.KindSetMetadata:
+					doWatchEntries(ev)
+				case nostr.KindTextNote, nostr.KindChannelMessage:
+					doHookEntries(ev)
+				}
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
 				}
@@ -608,6 +709,44 @@ func jwtEmail(c echo.Context) (string, error) {
 		return email.(string), nil
 	}
 	return "unknown", nil
+}
+
+func checkWatch(c echo.Context, watch *Watch) (bool, error) {
+	if err := c.Bind(&watch); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	watch.Name = strings.TrimSpace(watch.Name)
+	watch.Description = strings.TrimSpace(watch.Description)
+	watch.Author = strings.TrimSpace(watch.Author)
+	watch.Pattern = strings.TrimSpace(watch.Pattern)
+	watch.Endpoint = strings.TrimSpace(watch.Endpoint)
+	watch.Secret = strings.TrimSpace(watch.Secret)
+
+	if watch.Name == "" {
+		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
+	}
+	if watch.Endpoint == "" {
+		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
+	}
+	if email, err := jwtEmail(c); err == nil {
+		watch.Author = email
+	} else {
+		log.Println(err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	if watch.Pattern == "" {
+		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+	}
+	if _, err := regexp.Compile(watch.Pattern); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+	}
+	if _, err := url.Parse(watch.Endpoint); err != nil {
+		log.Println(err)
+		return false, c.JSON(http.StatusBadRequest, "Endpoint is invalid URL")
+	}
+	return true, nil
 }
 
 func checkHook(c echo.Context, hook *Hook) (bool, error) {
@@ -731,6 +870,63 @@ func manager() {
 
 	sub, _ := fs.Sub(assets, "static")
 	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(sub))))
+
+	e.GET("/watches", func(c echo.Context) error {
+		var watches []Watch
+		err := bundb.NewSelect().Model((*Watch)(nil)).Order("created_at").Scan(context.Background(), &watches)
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, watches)
+	})
+	e.GET("/watches/:name", func(c echo.Context) error {
+		var watch Watch
+		err := bundb.NewSelect().Model((*Watch)(nil)).Where("name = ?", c.Param("name")).Scan(context.Background(), &watch)
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, watch)
+	})
+	e.POST("/watches/", func(c echo.Context) error {
+		var watch Watch
+		if ok, err := checkWatch(c, &watch); !ok {
+			return err
+		}
+		_, err := bundb.NewInsert().Model(&watch).Exec(context.Background())
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		reloadWatches(bundb)
+		return c.JSON(http.StatusOK, watch)
+	})
+	e.POST("/watches/:name", func(c echo.Context) error {
+		var watch Watch
+		if ok, err := checkWatch(c, &watch); !ok {
+			return err
+		}
+		_, err := bundb.NewUpdate().Model(&watch).Where("name = ?", c.Param("name")).Exec(context.Background())
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		reloadWatches(bundb)
+		return c.JSON(http.StatusOK, watch)
+	})
+	e.DELETE("/watches/:name", func(c echo.Context) error {
+		result, err := bundb.NewDelete().Model((*Watch)(nil)).Where("name = ?", c.Param("name")).Exec(context.Background())
+		if err != nil {
+			e.Logger.Error(err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records deleted")
+		}
+		reloadWatches(bundb)
+		return c.JSON(http.StatusOK, c.Param("name"))
+	})
 
 	e.GET("/hooks", func(c echo.Context) error {
 		var hooks []Hook

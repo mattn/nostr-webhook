@@ -1,0 +1,80 @@
+<watch-modal>
+  <div class="dialog-screen" show={dialogShowing} onclick={closeDialog}>
+    <div class="dialog">
+    <form onsubmit={ add }>
+      <div>
+        <label><p>Name</p><p><input type="text" onkeyup={ (e) => edit(e, 'name') } class="input-name" value={ state.item.name } /></p></label>
+        <label><p>Description</p><textarea type="text" onkeyup={ (e) => edit(e, 'description') } class="input-description">{ state.item.description }</textarea></label>
+        <label><p>Pattern (Regular Expression)</p><p><input type="text" onkeyup={ (e) => edit(e, 'pattern') } class="input-pattern" value={ state.item.pattern } /></p></label>
+        <label><p>Endpoint (URL)</p><p><input type="text" onkeyup={ (e) => edit(e, 'endpoint') } class="input-endpoint" value={ state.item.endpoint } /></p></label>
+        <label><p>Enabled <input type="checkbox" onchange={ (e) => state.item.enabled = e.target.checked } checked={ state.item.enabled } /></p></label>
+        <label hidden={ state.create }><p class="secret">Secret: { state.item.secret }</p></label>
+      </div>
+      <p class="button-left">
+        <button onclick={ remove } hidden={ state.create }>Delete</button>
+      </p>
+      <p class="button-right">
+        <button>{ state.create ? "Add" : "Update" }</button>
+        <button onclick={ close }>Cancel</button>
+      </p>
+    </form>
+    </div>
+  </div>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          name: props.item.name,
+          item: props.item,
+          create: props.create,
+          parent: props.parent,
+        }
+      },
+      edit(e, name) {
+        const item = this.state.item
+        item[name] = e.target.value
+        this.update({item: item})
+      },
+      remove(e) {
+        e.preventDefault()
+        riot.mount('confirm', {message: 'Are you sure?', onOK: () => {
+          fetch('/watches/' + this.state.name, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.state.item),
+          })
+            .then((res) => res.json())
+            .then((json) => {
+              this.unmount('watch-modal', true)
+              this.state.parent.reload();
+            })
+            .catch(console.error)
+        }})
+      },
+      close(e) {
+        e.preventDefault()
+        this.unmount('watch-modal', true)
+        this.state.parent.reload();
+      },
+      add(e) {
+        e.preventDefault()
+        fetch('/watches/' + (this.state.create ? '' : this.state.name), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.state.item),
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            if (typeof json === 'string') throw new Error(json)
+            this.unmount('watch-modal', true)
+            this.state.parent.reload();
+          })
+          .catch((err) => {
+            riot.mount('message', {message: err, onOK: () => {}})
+          })
+      }
+    }
+  </script>
+</watch-modal>
+

@@ -1,0 +1,35 @@
+<!doctype html>
+
+<html>
+  <head>
+    <title>Webhooks</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link rel="stylesheet" href="app.css">
+    <script type="text/javascript" src="md5.js"></script>
+  </head>
+
+  <body>
+
+    <watch></watch>
+    <watch-modal></watch-modal>
+    <confirm></confirm>
+    <message></message>
+    <loading></loading>
+
+    <script src="watch.riot" type="riot"></script>
+    <script src="watch-modal.riot" type="riot"></script>
+    <script src="confirm.riot" type="riot"></script>
+    <script src="message.riot" type="riot"></script>
+    <script src="loading.riot" type="riot"></script>
+    <script src="/riot+compiler.min.js"></script>
+
+    <script>
+      riot.compile().then(async () => {
+        riot.mount('watch', {
+          title: 'Webhook - watch',
+          items: [],
+        })
+      })
+    </script>
+  </body>
+</html>

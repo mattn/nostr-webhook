@@ -1,0 +1,50 @@
+<watch>
+  <h3><a href="/">{ props.title }</a></h3>
+
+  <table>
+    <tr>
+      <th>-</th>
+      <th>Name</th>
+      <th>Pattern</th>
+      <th>Endpoint</th>
+      <th>-</th>
+    </tr>
+    <tr each={ item in state.items } class={ item.enabled ? null : 'disabled' }>
+      <td style='max-width: 40px'><img class="icon" src={ icon(item) }/></td>
+      <td>{ item.name }</td>
+      <td style='max-width: 200px'>{ item.pattern }</td>
+      <td style='max-width: 200px'>{ item.endpoint }</td>
+      <td><button onclick={() => modify(item)}>Edit</button></td>
+    </tr>
+  </table>
+  <br />
+  <button onclick={() => create()}>New</button>
+
+  <script>
+    export default {
+      onBeforeMount(props, state) {
+        this.state = {
+          items: props.items,
+        }
+        this.reload();
+      },
+      reload() {
+        riot.mount('loading', {message: 'Loading...'})
+        const reloader = async () => {
+          this.update({items: await (await fetch('/watches')).json()})
+          riot.unmount('loading', true)
+        }
+        reloader();
+      },
+      create() {
+        riot.mount('watch-modal', {item: {}, create: true, parent: this})
+      },
+      modify(item) {
+        riot.mount('watch-modal', {item: item, create: false, parent: this})
+      },
+      icon(item) {
+        return 'https://www.gravatar.com/avatar/' + CybozuLabs.MD5.calc(item.author)
+      }
+    }
+  </script>
+</watch>
