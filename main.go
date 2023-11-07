@@ -1134,7 +1134,7 @@ func init() {
 
 func main() {
 	var ver bool
-	flag.BoolVar(&ver, "v", false, "show version")
+	flag.BoolVar(&ver, "version", false, "show version")
 	flag.Parse()
 
 	if ver {
