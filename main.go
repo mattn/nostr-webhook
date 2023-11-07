@@ -183,7 +183,7 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
-	if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindSetMetadata) {
+	if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindProfileMetadata) {
 		log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
 		return false
 	}
@@ -562,7 +562,7 @@ func server(from *time.Time) {
 
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
-		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindSetMetadata},
+		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
 	sub, err := relay.Subscribe(context.Background(), filters)
@@ -589,7 +589,7 @@ func server(from *time.Time) {
 				}
 				enc.Encode(ev)
 				switch ev.Kind {
-				case nostr.KindSetMetadata:
+				case nostr.KindProfileMetadata:
 					doWatchEntries(ev)
 				case nostr.KindTextNote, nostr.KindChannelMessage:
 					doHookEntries(ev)
