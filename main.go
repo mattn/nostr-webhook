@@ -889,10 +889,13 @@ func manager() {
 		if ok, err := checkWatch(c, &watch); !ok {
 			return err
 		}
-		_, err := bundb.NewUpdate().Model(&watch).Where("name = ?", c.Param("name")).Exec(context.Background())
+		result, err := bundb.NewUpdate().Model(&watch).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records updated")
 		}
 		reloadWatches(bundb)
 		return c.JSON(http.StatusOK, watch)
@@ -946,10 +949,13 @@ func manager() {
 		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
-		_, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
+		result, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records updated")
 		}
 		reloadHooks(bundb)
 		return c.JSON(http.StatusOK, hook)
@@ -1003,10 +1009,13 @@ func manager() {
 		if ok, err := checkTask(c, &task); !ok {
 			return err
 		}
-		_, err = bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
+		result, err := bundb.NewUpdate().Model(&task).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		if num, err := result.RowsAffected(); err != nil || num == 0 {
+			return c.JSON(http.StatusInternalServerError, "No records updated")
 		}
 		reloadTasks(bundb)
 		return c.JSON(http.StatusOK, task)
@@ -1052,6 +1061,7 @@ func manager() {
 		reloadProxies(bundb)
 		return c.JSON(http.StatusOK, proxy)
 	})
+
 	e.POST("/post", func(c echo.Context) error {
 		name, password, ok := c.Request().BasicAuth()
 		if !ok {
