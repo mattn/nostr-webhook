@@ -39,7 +39,7 @@
       remove(e) {
         e.preventDefault()
         riot.mount('confirm', {message: 'Are you sure?', onOK: () => {
-          fetch('/watches/' + encodeURIComponent(this.state.name).replace(/[~!*()]/g, (x) => x.charCodeAt().toString(16).toUpperCase()), {
+          fetch('/watches/' + encodeURIComponent(this.state.name).replace(/[~!*()]/g, (x) => '%' + x.charCodeAt().toString(16).toUpperCase()), {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.state.item),
@@ -59,7 +59,7 @@
       },
       add(e) {
         e.preventDefault()
-        fetch('/watches/' + encodeURIComponent(this.state.create ? '' : this.state.name).replace(/[~!*()]/g, (x) => x.charCodeAt().toString(16).toUpperCase()), {
+        fetch('/watches/' + encodeURIComponent(this.state.create ? '' : this.state.name).replace(/[~!*()]/g, (x) => '%' + x.charCodeAt().toString(16).toUpperCase()), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.state.item),
