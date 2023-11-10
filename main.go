@@ -949,6 +949,7 @@ func manager() {
 		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
+		log.Printf("DEBUG %q", c.Param("name"))
 		result, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)
