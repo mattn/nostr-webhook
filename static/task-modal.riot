@@ -39,7 +39,7 @@
       remove(e) {
         e.preventDefault()
         riot.mount('confirm', {message: 'Are you sure?', onOK: () => {
-          fetch('/tasks/' + this.state.name, {
+          fetch('/tasks/' + encodeURI(this.state.name).replace(/[()]/g, (x) => escape(x)), {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.state.item),
