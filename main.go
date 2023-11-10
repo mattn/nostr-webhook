@@ -612,7 +612,6 @@ func server(from *time.Time) {
 				}
 			}
 		}
-		sub.Events <- nil
 		log.Println("Finish")
 	}(&wg, events)
 
