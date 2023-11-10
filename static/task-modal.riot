@@ -59,7 +59,7 @@
       },
       add(e) {
         e.preventDefault()
-        fetch('/tasks/' + encodeURIComponent(this.state.create ? '' : this.state.name), {
+        fetch('/tasks/' + encodeURI(this.state.create ? '' : this.state.name).replace(/[()]/g, (x) => escape(x)), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.state.item),
