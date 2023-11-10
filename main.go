@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/extra/bunslog"
 )
 
 const name = "nostr-webhook"
@@ -612,6 +614,8 @@ func server(from *time.Time) {
 				}
 			}
 		}
+		for range events {
+		}
 		log.Println("Finish")
 	}(&wg, events)
 
@@ -837,6 +841,12 @@ func manager() {
 	defer db.Close()
 
 	bundb := bun.NewDB(db, pgdialect.New())
+	bundb.AddQueryHook(bunslog.NewQueryHook(
+		bunslog.WithQueryLogLevel(slog.LevelDebug),
+		bunslog.WithSlowQueryLogLevel(slog.LevelWarn),
+		bunslog.WithErrorQueryLogLevel(slog.LevelError),
+		bunslog.WithSlowQueryThreshold(3*time.Second),
+	))
 	defer bundb.Close()
 
 	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
@@ -948,7 +958,6 @@ func manager() {
 		if ok, err := checkHook(c, &hook); !ok {
 			return err
 		}
-		log.Printf("DEBUG %q", c.Param("name"))
 		result, err := bundb.NewUpdate().Model(&hook).Where("name = ?", c.Param("name")).Exec(context.Background())
 		if err != nil {
 			e.Logger.Error(err)

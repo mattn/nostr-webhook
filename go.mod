@@ -1,6 +1,8 @@
 module github.com/mattn/nostr-webhook
 
-go 1.20
+go 1.21
+
+toolchain go1.21.1
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -10,10 +12,10 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/uptrace/bun v1.1.16
 	github.com/uptrace/bun/dialect/pgdialect v1.1.16
+	github.com/uptrace/bun/extra/bunslog v0.0.0-20231001121055-8a4383505d7e
 )
 
 require (
-	github.com/SaveTheRbtz/generic-sync-map-go v0.0.0-20230201052002-6c5833b989be // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.3 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
@@ -34,7 +36,6 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/puzpuzpuz/xsync v1.5.2 // indirect
 	github.com/puzpuzpuz/xsync/v2 v2.5.1 // indirect
 	github.com/tidwall/gjson v1.17.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
