@@ -28,6 +28,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/extra/bundebug"
 	"github.com/uptrace/bun/extra/bunslog"
 )
 
@@ -841,12 +842,20 @@ func manager() {
 	defer db.Close()
 
 	bundb := bun.NewDB(db, pgdialect.New())
-	bundb.AddQueryHook(bunslog.NewQueryHook(
-		bunslog.WithQueryLogLevel(slog.LevelDebug),
-		bunslog.WithSlowQueryLogLevel(slog.LevelWarn),
-		bunslog.WithErrorQueryLogLevel(slog.LevelError),
-		bunslog.WithSlowQueryThreshold(3*time.Second),
-	))
+	bundb.AddQueryHook(
+		bundebug.NewQueryHook(
+			bundebug.WithVerbose(true),
+			bundebug.FromEnv("BUNDEBUG"),
+		),
+	)
+	bundb.AddQueryHook(
+		bunslog.NewQueryHook(
+			bunslog.WithQueryLogLevel(slog.LevelDebug),
+			bunslog.WithSlowQueryLogLevel(slog.LevelWarn),
+			bunslog.WithErrorQueryLogLevel(slog.LevelError),
+			bunslog.WithSlowQueryThreshold(3*time.Second),
+		),
+	)
 	defer bundb.Close()
 
 	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
