@@ -625,11 +625,15 @@ func server(from *time.Time) {
 
 loop:
 	for {
-		ev, ok := <-sub.Events
-		if !ok || ev == nil {
+		select {
+		case ev, ok := <-sub.Events:
+			if !ok || ev == nil {
+				break loop
+			}
+			events <- ev
+		case <-relay.Context().Done():
 			break loop
 		}
-		events <- ev
 	}
 	wg.Wait()
 
