@@ -40,19 +40,20 @@ var revision = "HEAD"
 
 var (
 	feedRelays = []FeedRelay{
-		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
-		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: true},
+		{Relay: "wss://yabu.me", Enabled: true},
+		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: false},
 	}
 	feedIndex = 0
 
 	postRelays = []PostRelay{
-		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: true},
+		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: false},
 		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
-		{Relay: "wss://nostr.holybea.com", Enabled: true},
-		{Relay: "wss://relay.snort.social", Enabled: true},
+		{Relay: "wss://yabu.me", Enabled: true},
+		{Relay: "wss://nostr.holybea.com", Enabled: false},
+		{Relay: "wss://relay.snort.social", Enabled: false},
 		{Relay: "wss://relay.damus.io", Enabled: true},
-		{Relay: "wss://relay.nostrich.land", Enabled: true},
-		{Relay: "wss://nostr.h3z.jp", Enabled: true},
+		{Relay: "wss://nos.lol", Enabled: true},
+		{Relay: "wss://nostr.h3z.jp", Enabled: false},
 	}
 
 	//go:embed static
