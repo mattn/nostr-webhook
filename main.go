@@ -616,8 +616,6 @@ func server(from *time.Time) {
 				}
 			}
 		}
-		for range events {
-		}
 		log.Println("Finish")
 	}(&wg, events)
 
