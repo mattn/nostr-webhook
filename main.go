@@ -177,6 +177,10 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		return false
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		log.Printf("%v: Not found: %v", name, resp.StatusCode)
+		return false
+	}
 	if resp.StatusCode != 200 {
 		log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
 		return false
