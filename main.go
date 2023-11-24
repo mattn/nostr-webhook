@@ -595,6 +595,17 @@ func server(from *time.Time) {
 				}
 				retry = 0
 			case <-time.After(10 * time.Second):
+				alive := pool.Relays.Size()
+				pool.Relays.Range(func(key string, relay *nostr.Relay) bool {
+					if relay.ConnectionError != nil {
+						log.Println(relay.ConnectionError)
+						alive--
+					}
+					return true
+				})
+				if alive == 0 {
+					break events_loop
+				}
 				retry++
 				log.Println("Health check", retry)
 				if retry > 60 {
