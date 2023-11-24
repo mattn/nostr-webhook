@@ -43,7 +43,6 @@ var (
 		{Relay: "wss://yabu.me", Enabled: true},
 		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: false},
 	}
-	feedIndex = 0
 
 	postRelays = []PostRelay{
 		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: false},
@@ -135,8 +134,8 @@ type Proxy struct {
 
 // Info is struct for /info
 type Info struct {
-	Relay   string `json:"relay"`
-	Version string `json:"version"`
+	Relay   []string `json:"relay"`
+	Version string   `json:"version"`
 }
 
 var (
@@ -156,16 +155,14 @@ var (
 	reNormalize = regexp.MustCompile(`\bnostr:\w+\b`)
 )
 
-func switchFeedRelay() {
-	relayMu.Lock()
-	defer relayMu.Unlock()
-
-	for {
-		feedIndex++
-		if feedRelays[feedIndex%len(feedRelays)].Enabled {
-			break
+func feedRelayNames() []string {
+	names := []string{}
+	for _, v := range feedRelays {
+		if v.Enabled {
+			names = append(names, v.Relay)
 		}
 	}
+	return names
 }
 
 func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
@@ -553,15 +550,11 @@ func server(from *time.Time) {
 	reloadProxies(bundb)
 
 	log.Println("Connecting to relay")
-	relayMu.Lock()
-	relay, err := nostr.RelayConnect(context.Background(), feedRelays[feedIndex%len(feedRelays)].Relay)
-	relayMu.Unlock()
+	pool := nostr.NewSimplePool(context.Background())
 	if err != nil {
-		switchFeedRelay()
 		log.Println(err)
 		return
 	}
-	defer relay.Close()
 
 	log.Println("Connected to relay")
 
@@ -573,13 +566,8 @@ func server(from *time.Time) {
 		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
-	sub, err := relay.Subscribe(context.Background(), filters)
-	if err != nil {
-		switchFeedRelay()
-		log.Println(err)
-		return
-	}
-	defer sub.Close()
+	sub := pool.SubMany(context.Background(), feedRelayNames(), filters)
+	defer close(sub)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -607,15 +595,9 @@ func server(from *time.Time) {
 				}
 				retry = 0
 			case <-time.After(10 * time.Second):
-				if relay.ConnectionError != nil {
-					switchFeedRelay()
-					log.Println(relay.ConnectionError)
-					break events_loop
-				}
 				retry++
 				log.Println("Health check", retry)
 				if retry > 60 {
-					switchFeedRelay()
 					break events_loop
 				}
 			}
@@ -628,12 +610,12 @@ func server(from *time.Time) {
 loop:
 	for {
 		select {
-		case ev, ok := <-sub.Events:
-			if !ok || ev == nil {
+		case ev, ok := <-sub:
+			if !ok || ev.Event == nil {
 				break loop
 			}
-			events <- ev
-		case <-relay.Context().Done():
+			events <- ev.Event
+		case <-pool.Context.Done():
 			break loop
 		}
 	}
@@ -1153,7 +1135,7 @@ func manager() {
 		relayMu.Lock()
 		defer relayMu.Unlock()
 		info := Info{
-			Relay:   feedRelays[feedIndex%len(feedRelays)].Relay,
+			Relay:   feedRelayNames(),
 			Version: version,
 		}
 		return c.JSON(http.StatusOK, info)
