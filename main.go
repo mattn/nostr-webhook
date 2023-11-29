@@ -598,7 +598,7 @@ func server(from *time.Time) {
 				alive := pool.Relays.Size()
 				pool.Relays.Range(func(key string, relay *nostr.Relay) bool {
 					if relay.ConnectionError != nil {
-						log.Println(relay.ConnectionError)
+						log.Println(relay.ConnectionError, relay.IsConnected())
 						alive--
 					}
 					return true
