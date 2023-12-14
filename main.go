@@ -213,7 +213,7 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 					log.Printf("%v: %v: %v", name, r, err)
 					continue
 				}
-				_, err = relay.Publish(context.Background(), eev)
+				err = relay.Publish(context.Background(), eev)
 				relay.Close()
 				if err != nil {
 					log.Printf("%v: %v: %v", name, r, err)
@@ -369,7 +369,7 @@ func reloadTasks(bundb *bun.DB) {
 						log.Printf("%v: %v: %v", ct.Name, r, err)
 						continue
 					}
-					_, err = relay.Publish(context.Background(), eev)
+					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
 						log.Printf("%v: %v: %v", ct.Name, r, err)
@@ -1125,7 +1125,7 @@ func manager() {
 						log.Printf("%v: %v: %v", name, r, err)
 						continue
 					}
-					_, err = relay.Publish(context.Background(), eev)
+					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
 						log.Printf("%v: %v: %v", name, r, err)
@@ -1162,9 +1162,6 @@ func init() {
 }
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-	}()
 	var ver bool
 	flag.BoolVar(&ver, "version", false, "show version")
 	flag.Parse()
@@ -1173,6 +1170,10 @@ func main() {
 		fmt.Println(version)
 		os.Exit(0)
 	}
+
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	}()
 
 	go func() {
 		from := time.Now()

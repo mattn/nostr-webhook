@@ -96,8 +96,8 @@ github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovk
 github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/yFXSvRLM=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
-github.com/nbd-wtf/go-nostr v0.26.4 h1:C5AXvMaRZactznfjfvscciUFypCJT6AYYGpyQqRAQxQ=
-github.com/nbd-wtf/go-nostr v0.26.4/go.mod h1:bkffJI+x914sPQWum9ZRUn66D7NpDnAoWo1yICvj3/0=
+github.com/nbd-wtf/go-nostr v0.27.2 h1:RImJfo8IgOK2rgGNif2FHFXq4sjNwzeZILUp9JGtQDg=
+github.com/nbd-wtf/go-nostr v0.27.2/go.mod h1:e5WOFsKEpslDOxIgK00NqemH7KuAvKIW6sBXeJYCfUs=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

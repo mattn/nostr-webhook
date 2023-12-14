@@ -8,7 +8,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/labstack/echo/v4 v4.11.3
 	github.com/lib/pq v1.10.9
-	github.com/nbd-wtf/go-nostr v0.26.4
+	github.com/nbd-wtf/go-nostr v0.27.2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/uptrace/bun v1.1.16
 	github.com/uptrace/bun/dialect/pgdialect v1.1.16
