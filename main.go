@@ -12,6 +12,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
@@ -1161,6 +1162,9 @@ func init() {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	}()
 	var ver bool
 	flag.BoolVar(&ver, "version", false, "show version")
 	flag.Parse()
