@@ -551,7 +551,11 @@ func server(from *time.Time) {
 	reloadProxies(bundb)
 
 	log.Println("Connecting to relay")
-	pool := nostr.NewSimplePool(context.Background())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pool := nostr.NewSimplePool(ctx)
 	if err != nil {
 		log.Println(err)
 		return
@@ -573,6 +577,7 @@ func server(from *time.Time) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
+		defer cancel()
 		defer wg.Done()
 
 		retry := 0
@@ -1171,9 +1176,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	go func() {
-		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-	}()
+	go http.ListenAndServe("0.0.0.0:6060", nil)
 
 	go func() {
 		from := time.Now()
