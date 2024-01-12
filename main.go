@@ -571,7 +571,7 @@ func server(from *time.Time) {
 		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
-	sub := pool.SubMany(context.Background(), feedRelayNames(), filters)
+	sub := pool.SubMany(ctx, feedRelayNames(), filters)
 	defer close(sub)
 
 	var wg sync.WaitGroup
