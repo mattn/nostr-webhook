@@ -116,7 +116,7 @@ type Task struct {
 	Spec        string    `bun:"spec,notnull" json:"spec"`
 	Endpoint    string    `bun:"endpoint,notnull" json:"endpoint"`
 	Secret      string    `bun:"secret,notnull,default:random_string(12)" json:"secret"`
-	Enabled     bool      `bun:"enabled,notnull,default:false" json:"enabled"`
+	Enabled     bool      `bun:"enabled,default:false" json:"enabled"`
 	CreatedAt   time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 
 	id cron.EntryID
