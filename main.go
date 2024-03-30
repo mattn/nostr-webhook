@@ -129,7 +129,7 @@ type Proxy struct {
 	Name      string    `bun:"name,pk,notnull" json:"name"`
 	Password  string    `bun:"password,notnull,default:random_string(12)" json:"password"`
 	Author    string    `bun:"author,notnull" json:"author"`
-	Enabled   bool      `bun:"enabled,notnull,default:true" json:"enabled"`
+	Enabled   bool      `bun:"enabled,default:true" json:"enabled"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 }
 
