@@ -496,6 +496,15 @@ func reloadProxies(bundb *bun.DB) {
 	log.Printf("Reloaded %d proxies", len(ee))
 }
 
+func heartbeatPush(url string) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	defer resp.Body.Close()
+}
+
 func server(from *time.Time) {
 	enc := json.NewEncoder(os.Stdout)
 
@@ -574,6 +583,9 @@ func server(from *time.Time) {
 	sub := pool.SubMany(ctx, feedRelayNames(), filters)
 	defer close(sub)
 
+	hbtimer := time.NewTicker(5 * time.Minute)
+	defer hbtimer.Stop()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, events chan *nostr.Event) {
@@ -600,6 +612,10 @@ func server(from *time.Time) {
 					*from = ev.CreatedAt.Time()
 				}
 				retry = 0
+			case <-hbtimer.C:
+				if url := os.Getenv("HEARTBEAT_URL"); url != "" {
+					go heartbeatPush(url)
+				}
 			case <-time.After(10 * time.Second):
 				alive := pool.Relays.Size()
 				pool.Relays.Range(func(key string, relay *nostr.Relay) bool {
