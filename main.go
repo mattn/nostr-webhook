@@ -78,6 +78,7 @@ type Hook struct {
 
 	Name        string    `bun:"name,pk,notnull" json:"name"`
 	Description string    `bun:"description,notnull" json:"description"`
+	Kinds       string    `bun:"kinds,notnull,default:'1'" json:"kinds"`
 	Author      string    `bun:"author,notnull" json:"author"`
 	Pattern     string    `bun:"pattern,notnull" json:"pattern"`
 	MentionTo   string    `bun:"mention_to,notnull" json:"mention_to"`
@@ -154,6 +155,7 @@ var (
 	jobs *cron.Cron
 
 	reNormalize = regexp.MustCompile(`\bnostr:\w+\b`)
+	reKinds     = regexp.MustCompile(`^\s*\d+(?:\s*,\s*\d+)*\s*$`)
 )
 
 func feedRelayNames() []string {
@@ -757,6 +759,14 @@ func checkWatch(c echo.Context, watch *Watch) (bool, error) {
 	return true, nil
 }
 
+func trimNumbers(s string) string {
+	nums := []string{}
+	for _, ss := range strings.Split(s, ",") {
+		nums = append(nums, strings.TrimSpace(ss))
+	}
+	return strings.Join(nums, ",")
+}
+
 func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if err := c.Bind(&hook); err != nil {
 		log.Println(err)
@@ -764,6 +774,7 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	}
 	hook.Name = strings.TrimSpace(hook.Name)
 	hook.Description = strings.TrimSpace(hook.Description)
+	hook.Kinds = trimNumbers(hook.Kinds)
 	hook.Author = strings.TrimSpace(hook.Author)
 	hook.Pattern = strings.TrimSpace(hook.Pattern)
 	hook.MentionTo = strings.TrimSpace(hook.MentionTo)
@@ -772,6 +783,12 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 
 	if hook.Name == "" {
 		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
+	}
+	if hook.Kinds == "" {
+		return false, c.JSON(http.StatusBadRequest, "Kinds must not be empty")
+	}
+	if !reKinds.MatchString(hook.Kinds) {
+		return false, c.JSON(http.StatusBadRequest, "Kinds should be numbers separated by comma")
 	}
 	if hook.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
