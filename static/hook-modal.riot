@@ -5,7 +5,7 @@
       <div>
         <label><p>Name</p><p><input type="text" onkeyup={ (e) => edit(e, 'name') } class="input-name" value={ state.item.name } /></p></label>
         <label><p>Description</p><textarea type="text" onkeyup={ (e) => edit(e, 'description') } class="input-description">{ state.item.description }</textarea></label>
-        <label><p>Kinds</p><p><input  type="text" onkeyup={ (e) => edit(e, 'kinds') } class="input-kinds" value={ state.item.kinds } /></p></label>
+        <label><p>Kinds (Numbers separated by comma)</p><p><input  type="text" onkeyup={ (e) => edit(e, 'kinds') } class="input-kinds" value={ state.item.kinds } /></p></label>
         <label><p>Mention To (npub)</p><p><input type="text" onkeyup={ (e) => edit(e, 'mention_to') } class="input-mention_to" value={ state.item.mention_to } /></p></label>
         <label><p>Mention From (npub)</p><p><input type="text" onkeyup={ (e) => edit(e, 'mention_from') } class="input-mention_from" value={ state.item.mention_from } /></p></label>
         <label><p>Pattern (Regular Expression)</p><p><input type="text" onkeyup={ (e) => edit(e, 'pattern') } class="input-pattern" value={ state.item.pattern } /></p></label>
