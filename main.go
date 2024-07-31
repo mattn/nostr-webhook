@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -88,7 +89,8 @@ type Hook struct {
 	Enabled     bool      `bun:"enabled,default:false" json:"enabled"`
 	CreatedAt   time.Time `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 
-	re *regexp.Regexp
+	nums []int
+	re   *regexp.Regexp
 }
 
 // Watch is struct for webhook
@@ -251,7 +253,7 @@ func doWatchEntries(ev *nostr.Event) {
 		}
 		content := ev.Content
 		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
-		if !entry.re.MatchString(content) {
+		if entry.re != nil && !entry.re.MatchString(content) {
 			continue
 		}
 		log.Printf("%v: Matched Watch entry", entry.Name)
@@ -278,9 +280,19 @@ func doHookEntries(ev *nostr.Event) {
 		if !entry.Enabled {
 			continue
 		}
+		found := false
+		for _, k := range entry.nums {
+			if k == ev.Kind {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
 		content := ev.Content
 		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
-		if !entry.re.MatchString(content) {
+		if entry.re != nil && !entry.re.MatchString(content) {
 			continue
 		}
 		if entry.MentionTo != "" {
@@ -461,6 +473,7 @@ func reloadHooks(bundb *bun.DB) {
 		return
 	}
 	for i := range ee {
+		ee[i].nums = toNumbers(ee[i].Kinds)
 		if ee[i].Pattern != "" {
 			ee[i].re, err = regexp.Compile(ee[i].Pattern)
 			if err != nil {
@@ -759,6 +772,16 @@ func checkWatch(c echo.Context, watch *Watch) (bool, error) {
 	return true, nil
 }
 
+func toNumbers(s string) []int {
+	nums := []int{}
+	for _, ss := range strings.Split(s, ",") {
+		if n, err := strconv.Atoi(ss); err == nil {
+			nums = append(nums, n)
+		}
+	}
+	return nums
+}
+
 func trimNumbers(s string) string {
 	nums := []string{}
 	for _, ss := range strings.Split(s, ",") {
@@ -784,9 +807,6 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if hook.Name == "" {
 		return false, c.JSON(http.StatusBadRequest, "Name must not be empty")
 	}
-	if hook.Kinds == "" {
-		return false, c.JSON(http.StatusBadRequest, "Kinds must not be empty")
-	}
 	if !reKinds.MatchString(hook.Kinds) {
 		return false, c.JSON(http.StatusBadRequest, "Kinds should be numbers separated by comma")
 	}
@@ -799,12 +819,11 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if hook.Pattern == "" {
-		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
-	}
-	if _, err := regexp.Compile(hook.Pattern); err != nil {
-		log.Println(err)
-		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+	if hook.Pattern != "" {
+		if _, err := regexp.Compile(hook.Pattern); err != nil {
+			log.Println(err)
+			return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
+		}
 	}
 	if _, err := url.Parse(hook.Endpoint); err != nil {
 		log.Println(err)
