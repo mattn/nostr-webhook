@@ -193,10 +193,12 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
-	if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindProfileMetadata) {
-		log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
-		return false
-	}
+	/*
+		if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindProfileMetadata) {
+			log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
+			return false
+		}
+	*/
 
 	relayMu.Lock()
 	defer relayMu.Unlock()
@@ -592,7 +594,7 @@ func server(from *time.Time) {
 
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
-		Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
+		//Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
 	sub := pool.SubMany(ctx, feedRelayNames(), filters)
@@ -617,12 +619,15 @@ func server(from *time.Time) {
 					break events_loop
 				}
 				enc.Encode(ev)
-				switch ev.Kind {
-				case nostr.KindProfileMetadata:
-					doWatchEntries(ev)
-				case nostr.KindTextNote, nostr.KindChannelMessage:
-					doHookEntries(ev)
-				}
+				/*
+					switch ev.Kind {
+					case nostr.KindProfileMetadata:
+						doWatchEntries(ev)
+					case nostr.KindTextNote, nostr.KindChannelMessage:
+						doHookEntries(ev)
+					}
+				*/
+				doHookEntries(ev)
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
 				}
@@ -775,7 +780,7 @@ func checkWatch(c echo.Context, watch *Watch) (bool, error) {
 func toNumbers(s string) []int {
 	nums := []int{}
 	for _, ss := range strings.Split(s, ",") {
-		if n, err := strconv.Atoi(ss); err == nil {
+		if n, err := strconv.Atoi(ss); err == nil && n >= 0 {
 			nums = append(nums, n)
 		}
 	}
