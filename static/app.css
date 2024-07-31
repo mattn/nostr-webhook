@@ -30,7 +30,7 @@ label {
   cursor: pointer;
 }
 
-.input-name, .input-description, .input-mention_to, .input-mention_from, .input-pattern, .input-endpoint, .input-spec {
+.input-name, .input-description, .input-kinds, .input-mention_to, .input-mention_from, .input-pattern, .input-endpoint, .input-spec {
   width: 500px;
   border-radius: 0.2em;
 }
