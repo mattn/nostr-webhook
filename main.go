@@ -254,7 +254,8 @@ func doWatchEntries(ev *nostr.Event) {
 			continue
 		}
 		content := ev.Content
-		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
+		//content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
+		content = strings.TrimSpace(content)
 		if entry.re != nil && !entry.re.MatchString(content) {
 			continue
 		}
@@ -293,7 +294,8 @@ func doHookEntries(ev *nostr.Event) {
 			continue
 		}
 		content := ev.Content
-		content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
+		//content = strings.TrimSpace(reNormalize.ReplaceAllString(content, ""))
+		content = strings.TrimSpace(content)
 		if entry.re != nil && !entry.re.MatchString(content) {
 			continue
 		}
