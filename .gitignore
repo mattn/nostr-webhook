@@ -1,6 +1,9 @@
 secret.yaml
 k8s
 *.sh
+*.cmd
+*.bat
 nostr-webhook
+nostr-webhook.exe
 backup
 test.json
