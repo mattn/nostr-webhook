@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"log/slog"
@@ -170,7 +171,7 @@ func feedRelayNames() []string {
 	return names
 }
 
-func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
+func doHttpReqOnce(req *http.Request, name string) bool {
 	client := new(http.Client)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
@@ -187,18 +188,26 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 		log.Printf("%v: Invalid status code: %v", name, resp.StatusCode)
 		return false
 	}
-	var eev nostr.Event
-	err = json.NewDecoder(resp.Body).Decode(&eev)
+
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("%v: %v", name, err)
 		return false
 	}
-	/*
-		if (eev.Kind == nostr.KindTextNote || eev.Kind == nostr.KindChannelMessage) && (eev.Kind != ev.Kind && ev.Kind != nostr.KindProfileMetadata) {
-			log.Printf("%v: Invalid kind for %v: %v", name, ev.Kind, eev.Kind)
+
+	var eev nostr.Event
+	var eevs []nostr.Event
+
+	err = json.NewDecoder(bytes.NewReader(b)).Decode(&eev)
+	if err != nil {
+		err = json.NewDecoder(bytes.NewReader(b)).Decode(&eevs)
+		if err != nil {
+			log.Printf("%v: %v", name, err)
 			return false
 		}
-	*/
+	} else {
+		eevs = []nostr.Event{eev}
+	}
 
 	relayMu.Lock()
 	defer relayMu.Unlock()
@@ -219,12 +228,14 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 					log.Printf("%v: %v: %v", name, r, err)
 					continue
 				}
-				err = relay.Publish(context.Background(), eev)
-				relay.Close()
-				if err != nil {
-					log.Printf("%v: %v: %v", name, r, err)
-					continue
+				for _, vv := range eevs {
+					err = relay.Publish(context.Background(), vv)
+					if err != nil {
+						log.Printf("%v: %v: %v", name, r, err)
+						continue
+					}
 				}
+				relay.Close()
 				break
 			}
 		}()
@@ -233,9 +244,9 @@ func doHttpReqOnce(req *http.Request, name string, ev *nostr.Event) bool {
 	return true
 }
 
-func doHttpReq(req *http.Request, name string, ev *nostr.Event) {
+func doHttpReq(req *http.Request, name string) {
 	for i := 0; i < 3; i++ {
-		if doHttpReqOnce(req, name, ev) {
+		if doHttpReqOnce(req, name) {
 			return
 		}
 	}
@@ -267,7 +278,7 @@ func doWatchEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doHttpReq(req, entry.Name, ev)
+		go doHttpReq(req, entry.Name)
 	}
 }
 
@@ -328,7 +339,7 @@ func doHookEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
-		go doHttpReq(req, entry.Name, ev)
+		go doHttpReq(req, entry.Name)
 	}
 }
 
