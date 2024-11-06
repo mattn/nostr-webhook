@@ -359,6 +359,9 @@ func reloadTasks(bundb *bun.DB) {
 	}
 	for i := range ee {
 		ct := ee[i]
+		if !ct.Enabled {
+			continue
+		}
 		id, err := jobs.AddFunc(ct.Spec, func() {
 			log.Printf("%v: Start", ct.Name)
 			req, err := http.NewRequest(http.MethodGet, ct.Endpoint, nil)
