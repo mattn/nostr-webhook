@@ -173,7 +173,7 @@ func feedRelayNames() []string {
 
 func doHttpReqOnce(req *http.Request, name string) bool {
 	client := new(http.Client)
-	client.Timeout = 30 * time.Second
+	client.Timeout = 40 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println(err)
