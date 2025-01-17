@@ -249,6 +249,7 @@ func doHttpReq(req *http.Request, name string) {
 		if doHttpReqOnce(req, name) {
 			return
 		}
+		time.Sleep(5 * time.Second)
 	}
 }
 
