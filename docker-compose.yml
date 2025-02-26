@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8989:8989"
+    environment:
+      # Database connection (will be replaced with Supabase in step 1b)
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/postgres}
+    restart: unless-stopped
+    # For future health checks
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8989/info"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+
+# Volumes section for future use
+# volumes:
+#   data_volume:
+
+# Networks section for future use
+# networks:
+#   app_network:
+#     driver: bridge
