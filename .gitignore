@@ -1,4 +1,5 @@
 secret.yaml
+clinetasks/
 k8s
 *.sh
 *.cmd

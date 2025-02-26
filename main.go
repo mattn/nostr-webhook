@@ -539,6 +539,23 @@ func heartbeatPush(url string) {
 	defer resp.Body.Close()
 }
 
+func createRandomStringFunction(db *sql.DB) error {
+	_, err := db.Exec(`
+        CREATE OR REPLACE FUNCTION random_string(length integer) RETURNS text AS $$
+        BEGIN
+          RETURN substr(md5(random()::text), 1, length);
+        END;
+        $$ LANGUAGE plpgsql;
+    `)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as the function might already exist
+		return nil
+	}
+	log.Println("Successfully created random_string function")
+	return nil
+}
+
 func server(from *time.Time) {
 	enc := json.NewEncoder(os.Stdout)
 
@@ -550,6 +567,12 @@ func server(from *time.Time) {
 
 	bundb := bun.NewDB(db, pgdialect.New())
 	defer bundb.Close()
+
+	err = createRandomStringFunction(db)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as this is not critical
+	}
 
 	_, err = bundb.NewCreateTable().Model((*FeedRelay)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
@@ -564,6 +587,12 @@ func server(from *time.Time) {
 		return
 	}
 	reloadPostRelays(bundb)
+
+	err = createRandomStringFunction(db)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as this is not critical
+	}
 
 	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
