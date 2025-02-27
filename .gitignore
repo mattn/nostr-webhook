@@ -9,3 +9,4 @@ nostr-webhook.exe
 backup
 test.json
 .env
+.DS_Store

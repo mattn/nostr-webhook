@@ -270,8 +270,9 @@ func doHttpReqOnce(req *http.Request, name string) bool {
 	if err != nil {
 		err = json.NewDecoder(bytes.NewReader(b)).Decode(&eevs)
 		if err != nil {
-			log.Printf("%v: %v", name, err)
-			return false
+			// Just log what was received without implying success or failure
+			log.Printf("%v: Received response: %s", name, string(b))
+			return true // Return true to prevent retry attempts
 		}
 	} else {
 		eevs = []nostr.Event{eev}
