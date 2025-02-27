@@ -8,3 +8,4 @@ nostr-webhook
 nostr-webhook.exe
 backup
 test.json
+.env

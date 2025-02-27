@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
@@ -295,6 +296,14 @@ func doHttpReqOnce(req *http.Request, name string) bool {
 					log.Printf("%v: %v: %v", name, r, err)
 					continue
 				}
+
+				// Try to authenticate to the relay using NIP-42
+				if !authenticateRelay(context.Background(), relay) {
+					log.Printf("%v: %v: Authentication failed, skipping relay", name, r)
+					relay.Close()
+					continue
+				}
+
 				for _, vv := range eevs {
 					err = relay.Publish(context.Background(), vv)
 					if err != nil {
@@ -471,6 +480,14 @@ func reloadTasks(bundb *bun.DB) {
 						log.Printf("%v: %v: %v", ct.Name, r, err)
 						continue
 					}
+
+					// Try to authenticate to the relay using NIP-42
+					if !authenticateRelay(context.Background(), relay) {
+						log.Printf("%v: %v: Authentication failed, skipping relay", ct.Name, r)
+						relay.Close()
+						continue
+					}
+
 					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
@@ -778,11 +795,39 @@ func server(from *time.Time) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := nostr.NewSimplePool(ctx)
+	// Get the private key for authentication
+	sk, err := getPrivateKey()
 	if err != nil {
-		log.Println(err)
-		return
+		log.Printf("Error getting private key: %v", err)
+	} else {
+		pubKey, _ := nostr.GetPublicKey(sk)
+		log.Printf("Using public key for authentication: %s", pubKey)
 	}
+
+	// Create a pool with an auth handler
+	pool := nostr.NewSimplePool(ctx, nostr.WithAuthHandler(func(ctx context.Context, authEvent nostr.RelayEvent) error {
+		log.Printf("Received auth challenge from relay %s: %s", authEvent.Relay.URL, authEvent.Tags.GetFirst([]string{"challenge", ""}).Value())
+
+		// Get the private key
+		sk, err := getPrivateKey()
+		if err != nil {
+			log.Printf("Error getting private key for auth: %v", err)
+			return err
+		}
+
+		// Set the public key and sign the event
+		authEvent.PubKey, _ = nostr.GetPublicKey(sk)
+		log.Printf("Signing auth event with public key %s for relay %s", authEvent.PubKey, authEvent.Relay.URL)
+
+		err = authEvent.Sign(sk)
+		if err != nil {
+			log.Printf("Error signing auth event for relay %s: %v", authEvent.Relay.URL, err)
+			return err
+		}
+
+		log.Printf("Signed auth event for relay %s: %s", authEvent.Relay.URL, authEvent.ID)
+		return nil
+	}))
 
 	log.Println("Connected to relay")
 
@@ -794,6 +839,11 @@ func server(from *time.Time) {
 		//Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
+
+	// Log the feed relay names we're connecting to
+	feedNames := feedRelayNames()
+	log.Printf("Attempting to connect to %d feed relays: %v", len(feedNames), feedNames)
+
 	sub := pool.SubMany(ctx, feedRelayNames(), filters)
 	defer close(sub)
 
@@ -1527,6 +1577,14 @@ func manager() {
 						log.Printf("%v: %v: %v", name, r, err)
 						continue
 					}
+
+					// Try to authenticate to the relay using NIP-42
+					if !authenticateRelay(context.Background(), relay) {
+						log.Printf("%v: %v: Authentication failed, skipping relay", name, r)
+						relay.Close()
+						continue
+					}
+
 					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
@@ -1558,9 +1616,92 @@ func manager() {
 	e.Logger.Fatal(e.Start(":8989"))
 }
 
+// getPrivateKey loads the private key from the environment variables
+func getPrivateKey() (string, error) {
+	// Load .env file if it exists
+	_ = godotenv.Load()
+
+	// Get the private key from environment variables
+	nsecKey := os.Getenv("NOSTR_PRIVATE_KEY")
+	if nsecKey == "" {
+		return "", fmt.Errorf("NOSTR_PRIVATE_KEY environment variable not set")
+	}
+
+	// Decode the nsec key to get the raw private key
+	_, sk, err := nip19.Decode(nsecKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode private key: %w", err)
+	}
+
+	return sk.(string), nil
+}
+
+// authenticateRelay attempts to authenticate to a relay using NIP-42
+// Returns true if authentication was successful or not required, false if it failed
+func authenticateRelay(ctx context.Context, relay *nostr.Relay) bool {
+	log.Printf("Attempting to authenticate to relay %s", relay.URL)
+
+	// Get the private key
+	sk, err := getPrivateKey()
+	if err != nil {
+		log.Printf("Error getting private key for relay %s: %v", relay.URL, err)
+		return false
+	}
+
+	// Get the public key for logging
+	pubKey, _ := nostr.GetPublicKey(sk)
+	log.Printf("Using public key for authentication to relay %s: %s", relay.URL, pubKey)
+
+	// Create a signing function
+	signFunc := func(event *nostr.Event) error {
+		event.PubKey = pubKey
+		event.Sign(sk)
+		return nil
+	}
+
+	// Attempt to authenticate to the relay
+	// The go-nostr library will only perform authentication if the relay
+	// has sent an AUTH challenge message
+	err = relay.Auth(ctx, signFunc)
+	if err != nil {
+		// Log the full error for debugging
+		log.Printf("Authentication error details for relay %s: %v", relay.URL, err)
+
+		// If there's an error, it could be because:
+		// 1. The relay doesn't support NIP-42 (not an error, just no auth needed)
+		// 2. Authentication failed (actual error)
+		if strings.Contains(err.Error(), "no challenge received") {
+			// This means the relay doesn't require authentication
+			log.Printf("Relay %s does not require authentication", relay.URL)
+			return true
+		}
+
+		// Check for other common error messages
+		if strings.Contains(err.Error(), "authentication failed") ||
+			strings.Contains(err.Error(), "unauthorized") ||
+			strings.Contains(err.Error(), "forbidden") {
+			log.Printf("Authentication failed for relay %s: %v", relay.URL, err)
+			return false
+		}
+
+		log.Printf("Error authenticating to relay %s: %v", relay.URL, err)
+		return false
+	}
+
+	// The Auth method returning without error only means the AUTH event was sent successfully,
+	// not that the relay accepted the authentication. The relay may close the connection
+	// if authentication fails, but we can't reliably detect that here.
+	return true
+}
+
 func init() {
 	time.Local = time.FixedZone("Local", 9*60*60)
 	jobs = cron.New(cron.WithLocation(time.Local))
+
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found or could not be loaded: %v", err)
+	}
 }
 
 func main() {

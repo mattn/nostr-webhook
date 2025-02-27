@@ -1,3 +1,4 @@
 secret.yaml
 k8s
 test.sh
+.env
