@@ -42,21 +42,8 @@ const version = "0.0.126"
 var revision = "HEAD"
 
 var (
-	feedRelays = []FeedRelay{
-		{Relay: "wss://yabu.me", Enabled: true},
-		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: false},
-	}
-
-	postRelays = []PostRelay{
-		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: false},
-		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
-		{Relay: "wss://yabu.me", Enabled: true},
-		{Relay: "wss://nostr.holybea.com", Enabled: false},
-		{Relay: "wss://relay.snort.social", Enabled: false},
-		{Relay: "wss://relay.damus.io", Enabled: true},
-		{Relay: "wss://nos.lol", Enabled: true},
-		{Relay: "wss://nostr.h3z.jp", Enabled: false},
-	}
+	feedRelays = loadFeedRelaysFromConfig()
+	postRelays = loadPostRelaysFromConfig()
 
 	//go:embed static
 	assets embed.FS
@@ -160,6 +147,86 @@ var (
 	reNormalize = regexp.MustCompile(`\bnostr:\w+\b`)
 	reKinds     = regexp.MustCompile(`^\s*\d+(?:\s*,\s*\d+)*\s*$`)
 )
+
+func loadFeedRelaysFromConfig() []FeedRelay {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
+		return []FeedRelay{} // Return empty slice on error
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Relays struct {
+			Feed []struct {
+				Relay   string `json:"relay"`
+				Enabled bool   `json:"enabled"`
+			} `json:"feed"`
+		} `json:"relays"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return []FeedRelay{} // Return empty slice on error
+	}
+
+	// Convert to FeedRelay slice
+	result := make([]FeedRelay, len(config.Relays.Feed))
+	for i, relay := range config.Relays.Feed {
+		result[i] = FeedRelay{
+			Relay:   relay.Relay,
+			Enabled: relay.Enabled,
+		}
+	}
+
+	log.Printf("Loaded %d feed relays from config", len(result))
+	return result
+}
+
+func loadPostRelaysFromConfig() []PostRelay {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
+		return []PostRelay{} // Return empty slice on error
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Relays struct {
+			Post []struct {
+				Relay   string `json:"relay"`
+				Enabled bool   `json:"enabled"`
+			} `json:"post"`
+		} `json:"relays"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return []PostRelay{} // Return empty slice on error
+	}
+
+	// Convert to PostRelay slice
+	result := make([]PostRelay, len(config.Relays.Post))
+	for i, relay := range config.Relays.Post {
+		result[i] = PostRelay{
+			Relay:   relay.Relay,
+			Enabled: relay.Enabled,
+		}
+	}
+
+	log.Printf("Loaded %d post relays from config", len(result))
+	return result
+}
 
 func feedRelayNames() []string {
 	names := []string{}
@@ -429,8 +496,49 @@ func reloadTasks(bundb *bun.DB) {
 func reloadFeedRelays(bundb *bun.DB) {
 	log.Printf("Reload feed relays")
 
+	// Load existing relays from database
+	var dbRelays []FeedRelay
+	err := bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &dbRelays)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Get the current relays loaded from config.json
+	configRelays := loadFeedRelaysFromConfig()
+
+	// Create a map of existing relays for quick lookup
+	dbRelayMap := make(map[string]FeedRelay)
+	for _, relay := range dbRelays {
+		dbRelayMap[relay.Relay] = relay
+	}
+
+	// Process each relay from config.json
+	for _, configRelay := range configRelays {
+		if dbRelay, exists := dbRelayMap[configRelay.Relay]; exists {
+			// Relay exists in database, check if it needs updating
+			if dbRelay.Enabled != configRelay.Enabled {
+				log.Printf("Updating feed relay %s (enabled: %v -> %v)", configRelay.Relay, dbRelay.Enabled, configRelay.Enabled)
+				_, err := bundb.NewUpdate().Model(&configRelay).
+					Where("relay = ?", configRelay.Relay).
+					Exec(context.Background())
+				if err != nil {
+					log.Printf("Error updating feed relay %s: %v", configRelay.Relay, err)
+				}
+			}
+		} else {
+			// Relay doesn't exist in database, insert it
+			log.Printf("Adding new feed relay from config: %s (enabled: %v)", configRelay.Relay, configRelay.Enabled)
+			_, err := bundb.NewInsert().Model(&configRelay).Exec(context.Background())
+			if err != nil {
+				log.Printf("Error inserting feed relay %s: %v", configRelay.Relay, err)
+			}
+		}
+	}
+
+	// Reload all relays from database after changes
 	var ee []FeedRelay
-	err := bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &ee)
+	err = bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &ee)
 	if err != nil {
 		log.Println(err)
 		return
@@ -445,8 +553,49 @@ func reloadFeedRelays(bundb *bun.DB) {
 func reloadPostRelays(bundb *bun.DB) {
 	log.Printf("Reload post relays")
 
+	// Load existing relays from database
+	var dbRelays []PostRelay
+	err := bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &dbRelays)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Get the current relays loaded from config.json
+	configRelays := loadPostRelaysFromConfig()
+
+	// Create a map of existing relays for quick lookup
+	dbRelayMap := make(map[string]PostRelay)
+	for _, relay := range dbRelays {
+		dbRelayMap[relay.Relay] = relay
+	}
+
+	// Process each relay from config.json
+	for _, configRelay := range configRelays {
+		if dbRelay, exists := dbRelayMap[configRelay.Relay]; exists {
+			// Relay exists in database, check if it needs updating
+			if dbRelay.Enabled != configRelay.Enabled {
+				log.Printf("Updating post relay %s (enabled: %v -> %v)", configRelay.Relay, dbRelay.Enabled, configRelay.Enabled)
+				_, err := bundb.NewUpdate().Model(&configRelay).
+					Where("relay = ?", configRelay.Relay).
+					Exec(context.Background())
+				if err != nil {
+					log.Printf("Error updating post relay %s: %v", configRelay.Relay, err)
+				}
+			}
+		} else {
+			// Relay doesn't exist in database, insert it
+			log.Printf("Adding new post relay from config: %s (enabled: %v)", configRelay.Relay, configRelay.Enabled)
+			_, err := bundb.NewInsert().Model(&configRelay).Exec(context.Background())
+			if err != nil {
+				log.Printf("Error inserting post relay %s: %v", configRelay.Relay, err)
+			}
+		}
+	}
+
+	// Reload all relays from database after changes
 	var ee []PostRelay
-	err := bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &ee)
+	err = bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &ee)
 	if err != nil {
 		log.Println(err)
 		return

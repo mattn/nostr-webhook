@@ -1,5 +1,21 @@
 {
   "auth": {
     "requireCloudflare": false
+  },
+  "relays": {
+    "feed": [
+      {"relay": "wss://yabu.me", "enabled": true},
+      {"relay": "wss://relay-jp.nostr.wirednet.jp", "enabled": false}
+    ],
+    "post": [
+      {"relay": "wss://nostr-relay.nokotaro.com", "enabled": false},
+      {"relay": "wss://relay-jp.nostr.wirednet.jp", "enabled": true},
+      {"relay": "wss://yabu.me", "enabled": true},
+      {"relay": "wss://nostr.holybea.com", "enabled": false},
+      {"relay": "wss://relay.snort.social", "enabled": false},
+      {"relay": "wss://relay.damus.io", "enabled": true},
+      {"relay": "wss://nos.lol", "enabled": true},
+      {"relay": "wss://nostr.h3z.jp", "enabled": false}
+    ]
   }
 }
