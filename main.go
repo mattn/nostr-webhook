@@ -803,11 +803,43 @@ func checkWatch(c echo.Context, watch *Watch) (bool, error) {
 	if watch.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		watch.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			watch.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		watch.Author = "unknown"
 	}
 	if watch.Pattern == "" {
 		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
@@ -864,11 +896,38 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if hook.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		hook.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			hook.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		hook.Author = "unknown"
 	}
 	if hook.Pattern != "" {
 		if _, err := regexp.Compile(hook.Pattern); err != nil {
@@ -906,11 +965,38 @@ func checkTask(c echo.Context, task *Task) (bool, error) {
 	if task.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		task.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			task.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		task.Author = "unknown"
 	}
 	if _, err := cron.ParseStandard(task.Spec); err != nil {
 		log.Println(err)
@@ -928,17 +1014,46 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if email, err := jwtEmail(c); err == nil {
-		proxy.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if name, err := jwtName(c); err == nil {
-		proxy.Name = name
-	} else {
-		log.Println(err)
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author and name based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email and name if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			proxy.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+
+		if name, err := jwtName(c); err == nil {
+			proxy.Name = name
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use default values
+		proxy.Author = "unknown"
+		proxy.Name = "unknown"
 	}
 	return true, nil
 }
@@ -1162,11 +1277,39 @@ func manager() {
 
 	e.GET("/proxy", func(c echo.Context) error {
 		var proxy Proxy
-		name, err := jwtName(c)
+
+		// First check if Cloudflare auth is required
+		configFile, err := os.Open("config.json")
 		if err != nil {
-			log.Println(err)
+			log.Println("Error opening config file:", err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		defer configFile.Close()
+
+		var config struct {
+			Auth struct {
+				RequireCloudflare bool `json:"requireCloudflare"`
+			} `json:"auth"`
+		}
+
+		if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+			log.Println("Error decoding config file:", err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+
+		var name string
+		if config.Auth.RequireCloudflare {
+			// Only try to get the name if Cloudflare auth is required
+			name, err = jwtName(c)
+			if err != nil {
+				log.Println(err)
+				return c.JSON(http.StatusInternalServerError, err.Error())
+			}
+		} else {
+			// If Cloudflare auth is not required, use default value
+			name = "unknown"
+		}
+
 		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", name).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)

@@ -16,6 +16,8 @@ services:
         condition: service_healthy
     networks:
       - app_network
+    volumes:
+      - ./config.json:/config.json
     # For future health checks
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8989/info"]
