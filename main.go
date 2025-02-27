@@ -346,6 +346,7 @@ func doWatchEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
 		go doHttpReq(req, entry.Name)
 	}
 }
@@ -407,6 +408,7 @@ func doHookEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
 		go doHttpReq(req, entry.Name)
 	}
 }
