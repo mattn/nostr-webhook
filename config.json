@@ -1,24 +1,15 @@
 {
   "auth": {
-    "requireCloudflare": false
+    "requireCloudflare": true
   },
   "relays": {
     "feed": [
-      {"relay": "wss://assistantrelay.rodbishop.nz", "enabled": true},
-      {"relay": "wss://relay.damus.io", "enabled": false},
-      {"relay": "wss://yabu.me", "enabled": false},
-      {"relay": "wss://relay-jp.nostr.wirednet.jp", "enabled": false}
+      {"relay": "wss://relay.damus.io", "enabled": true},
+      {"relay": "wss://yabu.me", "enabled": true}
     ],
     "post": [
-      {"relay": "wss://assistantrelay.rodbishop.nz", "enabled": true},
-      {"relay": "wss://nostr-relay.nokotaro.com", "enabled": false},
-      {"relay": "wss://relay-jp.nostr.wirednet.jp", "enabled": true},
-      {"relay": "wss://yabu.me", "enabled": false},
-      {"relay": "wss://nostr.holybea.com", "enabled": false},
-      {"relay": "wss://relay.snort.social", "enabled": false},
-      {"relay": "wss://relay.damus.io", "enabled": false},
-      {"relay": "wss://nos.lol", "enabled": false},
-      {"relay": "wss://nostr.h3z.jp", "enabled": false}
+      {"relay": "wss://relay.damus.io", "enabled": true},
+      {"relay": "wss://yabu.me", "enabled": true}
     ]
   }
 }
