@@ -10,3 +10,4 @@ backup
 test.json
 .env
 .DS_Store
+config.json

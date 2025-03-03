@@ -67,6 +67,9 @@ Configuration is done through a `config.json` file:
 
 ## Environment Variables
 
+- `POSTGRES_USER`: PostgreSQL username
+- `POSTGRES_PASSWORD`: PostgreSQL password
+- `POSTGRES_DB`: PostgreSQL database name
 - `NOSTR_PRIVATE_KEY`: Your Nostr private key in nsec format used for NIP-42 relay authentication
 
 ## Usage
