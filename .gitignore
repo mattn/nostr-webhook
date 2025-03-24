@@ -1,4 +1,5 @@
 secret.yaml
+clinetasks/
 k8s
 *.sh
 *.cmd
@@ -7,3 +8,6 @@ nostr-webhook
 nostr-webhook.exe
 backup
 test.json
+.env
+.DS_Store
+config.json

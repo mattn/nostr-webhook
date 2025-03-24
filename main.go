@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
@@ -42,21 +43,8 @@ const version = "0.0.126"
 var revision = "HEAD"
 
 var (
-	feedRelays = []FeedRelay{
-		{Relay: "wss://yabu.me", Enabled: true},
-		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: false},
-	}
-
-	postRelays = []PostRelay{
-		{Relay: "wss://nostr-relay.nokotaro.com", Enabled: false},
-		{Relay: "wss://relay-jp.nostr.wirednet.jp", Enabled: true},
-		{Relay: "wss://yabu.me", Enabled: true},
-		{Relay: "wss://nostr.holybea.com", Enabled: false},
-		{Relay: "wss://relay.snort.social", Enabled: false},
-		{Relay: "wss://relay.damus.io", Enabled: true},
-		{Relay: "wss://nos.lol", Enabled: true},
-		{Relay: "wss://nostr.h3z.jp", Enabled: false},
-	}
+	feedRelays = loadFeedRelaysFromConfig()
+	postRelays = loadPostRelaysFromConfig()
 
 	//go:embed static
 	assets embed.FS
@@ -161,6 +149,119 @@ var (
 	reKinds     = regexp.MustCompile(`^\s*\d+(?:\s*,\s*\d+)*\s*$`)
 )
 
+// getDatabaseURL constructs a PostgreSQL connection string from environment variables
+// It first checks for DATABASE_URL for backward compatibility, then falls back to
+// constructing the URL from individual POSTGRES_* variables
+func getDatabaseURL() string {
+	// First check if DATABASE_URL is explicitly set (backward compatibility)
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL != "" {
+		return dbURL
+	}
+
+	// Get essential variables with fallbacks
+	user := getEnvWithDefault("POSTGRES_USER", "postgres")
+	password := getEnvWithDefault("POSTGRES_PASSWORD", "postgres")
+	db := getEnvWithDefault("POSTGRES_DB", "postgres")
+	host := getEnvWithDefault("POSTGRES_HOST", "localhost")
+
+	// Use hardcoded defaults for non-essential parameters
+	port := getEnvWithDefault("POSTGRES_PORT", "5432")
+	sslMode := getEnvWithDefault("POSTGRES_SSLMODE", "disable")
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		user, password, host, port, db, sslMode)
+}
+
+// getEnvWithDefault returns the value of the environment variable or the default value if not set
+func getEnvWithDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func loadFeedRelaysFromConfig() []FeedRelay {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
+		return []FeedRelay{} // Return empty slice on error
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Relays struct {
+			Feed []struct {
+				Relay   string `json:"relay"`
+				Enabled bool   `json:"enabled"`
+			} `json:"feed"`
+		} `json:"relays"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return []FeedRelay{} // Return empty slice on error
+	}
+
+	// Convert to FeedRelay slice
+	result := make([]FeedRelay, len(config.Relays.Feed))
+	for i, relay := range config.Relays.Feed {
+		result[i] = FeedRelay{
+			Relay:   relay.Relay,
+			Enabled: relay.Enabled,
+		}
+	}
+
+	log.Printf("Loaded %d feed relays from config", len(result))
+	return result
+}
+
+func loadPostRelaysFromConfig() []PostRelay {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
+		return []PostRelay{} // Return empty slice on error
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Relays struct {
+			Post []struct {
+				Relay   string `json:"relay"`
+				Enabled bool   `json:"enabled"`
+			} `json:"post"`
+		} `json:"relays"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return []PostRelay{} // Return empty slice on error
+	}
+
+	// Convert to PostRelay slice
+	result := make([]PostRelay, len(config.Relays.Post))
+	for i, relay := range config.Relays.Post {
+		result[i] = PostRelay{
+			Relay:   relay.Relay,
+			Enabled: relay.Enabled,
+		}
+	}
+
+	log.Printf("Loaded %d post relays from config", len(result))
+	return result
+}
+
 func feedRelayNames() []string {
 	names := []string{}
 	for _, v := range feedRelays {
@@ -202,8 +303,9 @@ func doHttpReqOnce(req *http.Request, name string) bool {
 	if err != nil {
 		err = json.NewDecoder(bytes.NewReader(b)).Decode(&eevs)
 		if err != nil {
-			log.Printf("%v: %v", name, err)
-			return false
+			// Just log what was received without implying success or failure
+			log.Printf("%v: Received response: %s", name, string(b))
+			return true // Return true to prevent retry attempts
 		}
 	} else {
 		eevs = []nostr.Event{eev}
@@ -228,6 +330,14 @@ func doHttpReqOnce(req *http.Request, name string) bool {
 					log.Printf("%v: %v: %v", name, r, err)
 					continue
 				}
+
+				// Try to authenticate to the relay using NIP-42
+				if !authenticateRelay(context.Background(), relay) {
+					log.Printf("%v: %v: Authentication failed, skipping relay", name, r)
+					relay.Close()
+					continue
+				}
+
 				for _, vv := range eevs {
 					err = relay.Publish(context.Background(), vv)
 					if err != nil {
@@ -279,6 +389,7 @@ func doWatchEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
 		go doHttpReq(req, entry.Name)
 	}
 }
@@ -340,6 +451,7 @@ func doHookEntries(ev *nostr.Event) {
 		}
 		req.Header.Set("Authorization", "Bearer "+entry.Secret)
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
 		go doHttpReq(req, entry.Name)
 	}
 }
@@ -402,6 +514,14 @@ func reloadTasks(bundb *bun.DB) {
 						log.Printf("%v: %v: %v", ct.Name, r, err)
 						continue
 					}
+
+					// Try to authenticate to the relay using NIP-42
+					if !authenticateRelay(context.Background(), relay) {
+						log.Printf("%v: %v: Authentication failed, skipping relay", ct.Name, r)
+						relay.Close()
+						continue
+					}
+
 					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
@@ -429,8 +549,49 @@ func reloadTasks(bundb *bun.DB) {
 func reloadFeedRelays(bundb *bun.DB) {
 	log.Printf("Reload feed relays")
 
+	// Load existing relays from database
+	var dbRelays []FeedRelay
+	err := bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &dbRelays)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Get the current relays loaded from config.json
+	configRelays := loadFeedRelaysFromConfig()
+
+	// Create a map of existing relays for quick lookup
+	dbRelayMap := make(map[string]FeedRelay)
+	for _, relay := range dbRelays {
+		dbRelayMap[relay.Relay] = relay
+	}
+
+	// Process each relay from config.json
+	for _, configRelay := range configRelays {
+		if dbRelay, exists := dbRelayMap[configRelay.Relay]; exists {
+			// Relay exists in database, check if it needs updating
+			if dbRelay.Enabled != configRelay.Enabled {
+				log.Printf("Updating feed relay %s (enabled: %v -> %v)", configRelay.Relay, dbRelay.Enabled, configRelay.Enabled)
+				_, err := bundb.NewUpdate().Model(&configRelay).
+					Where("relay = ?", configRelay.Relay).
+					Exec(context.Background())
+				if err != nil {
+					log.Printf("Error updating feed relay %s: %v", configRelay.Relay, err)
+				}
+			}
+		} else {
+			// Relay doesn't exist in database, insert it
+			log.Printf("Adding new feed relay from config: %s (enabled: %v)", configRelay.Relay, configRelay.Enabled)
+			_, err := bundb.NewInsert().Model(&configRelay).Exec(context.Background())
+			if err != nil {
+				log.Printf("Error inserting feed relay %s: %v", configRelay.Relay, err)
+			}
+		}
+	}
+
+	// Reload all relays from database after changes
 	var ee []FeedRelay
-	err := bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &ee)
+	err = bundb.NewSelect().Model((*FeedRelay)(nil)).Scan(context.Background(), &ee)
 	if err != nil {
 		log.Println(err)
 		return
@@ -445,8 +606,49 @@ func reloadFeedRelays(bundb *bun.DB) {
 func reloadPostRelays(bundb *bun.DB) {
 	log.Printf("Reload post relays")
 
+	// Load existing relays from database
+	var dbRelays []PostRelay
+	err := bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &dbRelays)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// Get the current relays loaded from config.json
+	configRelays := loadPostRelaysFromConfig()
+
+	// Create a map of existing relays for quick lookup
+	dbRelayMap := make(map[string]PostRelay)
+	for _, relay := range dbRelays {
+		dbRelayMap[relay.Relay] = relay
+	}
+
+	// Process each relay from config.json
+	for _, configRelay := range configRelays {
+		if dbRelay, exists := dbRelayMap[configRelay.Relay]; exists {
+			// Relay exists in database, check if it needs updating
+			if dbRelay.Enabled != configRelay.Enabled {
+				log.Printf("Updating post relay %s (enabled: %v -> %v)", configRelay.Relay, dbRelay.Enabled, configRelay.Enabled)
+				_, err := bundb.NewUpdate().Model(&configRelay).
+					Where("relay = ?", configRelay.Relay).
+					Exec(context.Background())
+				if err != nil {
+					log.Printf("Error updating post relay %s: %v", configRelay.Relay, err)
+				}
+			}
+		} else {
+			// Relay doesn't exist in database, insert it
+			log.Printf("Adding new post relay from config: %s (enabled: %v)", configRelay.Relay, configRelay.Enabled)
+			_, err := bundb.NewInsert().Model(&configRelay).Exec(context.Background())
+			if err != nil {
+				log.Printf("Error inserting post relay %s: %v", configRelay.Relay, err)
+			}
+		}
+	}
+
+	// Reload all relays from database after changes
 	var ee []PostRelay
-	err := bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &ee)
+	err = bundb.NewSelect().Model((*PostRelay)(nil)).Scan(context.Background(), &ee)
 	if err != nil {
 		log.Println(err)
 		return
@@ -539,10 +741,27 @@ func heartbeatPush(url string) {
 	defer resp.Body.Close()
 }
 
+func createRandomStringFunction(db *sql.DB) error {
+	_, err := db.Exec(`
+        CREATE OR REPLACE FUNCTION random_string(length integer) RETURNS text AS $$
+        BEGIN
+          RETURN substr(md5(random()::text), 1, length);
+        END;
+        $$ LANGUAGE plpgsql;
+    `)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as the function might already exist
+		return nil
+	}
+	log.Println("Successfully created random_string function")
+	return nil
+}
+
 func server(from *time.Time) {
 	enc := json.NewEncoder(os.Stdout)
 
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("postgres", getDatabaseURL())
 	if err != nil {
 		log.Println(err)
 		return
@@ -550,6 +769,12 @@ func server(from *time.Time) {
 
 	bundb := bun.NewDB(db, pgdialect.New())
 	defer bundb.Close()
+
+	err = createRandomStringFunction(db)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as this is not critical
+	}
 
 	_, err = bundb.NewCreateTable().Model((*FeedRelay)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
@@ -564,6 +789,12 @@ func server(from *time.Time) {
 		return
 	}
 	reloadPostRelays(bundb)
+
+	err = createRandomStringFunction(db)
+	if err != nil {
+		log.Printf("Warning: Failed to create random_string function: %v", err)
+		// Continue anyway as this is not critical
+	}
 
 	_, err = bundb.NewCreateTable().Model((*Hook)(nil)).IfNotExists().Exec(context.Background())
 	if err != nil {
@@ -598,11 +829,39 @@ func server(from *time.Time) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := nostr.NewSimplePool(ctx)
+	// Get the private key for authentication
+	sk, err := getPrivateKey()
 	if err != nil {
-		log.Println(err)
-		return
+		log.Printf("Error getting private key: %v", err)
+	} else {
+		pubKey, _ := nostr.GetPublicKey(sk)
+		log.Printf("Using public key for authentication: %s", pubKey)
 	}
+
+	// Create a pool with an auth handler
+	pool := nostr.NewSimplePool(ctx, nostr.WithAuthHandler(func(ctx context.Context, authEvent nostr.RelayEvent) error {
+		log.Printf("Received auth challenge from relay %s: %s", authEvent.Relay.URL, authEvent.Tags.GetFirst([]string{"challenge", ""}).Value())
+
+		// Get the private key
+		sk, err := getPrivateKey()
+		if err != nil {
+			log.Printf("Error getting private key for auth: %v", err)
+			return err
+		}
+
+		// Set the public key and sign the event
+		authEvent.PubKey, _ = nostr.GetPublicKey(sk)
+		log.Printf("Signing auth event with public key %s for relay %s", authEvent.PubKey, authEvent.Relay.URL)
+
+		err = authEvent.Sign(sk)
+		if err != nil {
+			log.Printf("Error signing auth event for relay %s: %v", authEvent.Relay.URL, err)
+			return err
+		}
+
+		log.Printf("Signed auth event for relay %s: %s", authEvent.Relay.URL, authEvent.ID)
+		return nil
+	}))
 
 	log.Println("Connected to relay")
 
@@ -614,6 +873,11 @@ func server(from *time.Time) {
 		//Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
 		Since: &timestamp,
 	}}
+
+	// Log the feed relay names we're connecting to
+	feedNames := feedRelayNames()
+	log.Printf("Attempting to connect to %d feed relays: %v", len(feedNames), feedNames)
+
 	sub := pool.SubMany(ctx, feedRelayNames(), filters)
 	defer close(sub)
 
@@ -774,11 +1038,43 @@ func checkWatch(c echo.Context, watch *Watch) (bool, error) {
 	if watch.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		watch.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.json" // Default to local config.json if environment variable not set
+	}
+
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			watch.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		watch.Author = "unknown"
 	}
 	if watch.Pattern == "" {
 		return false, c.JSON(http.StatusBadRequest, "Pattern is invalid regular expression")
@@ -835,11 +1131,38 @@ func checkHook(c echo.Context, hook *Hook) (bool, error) {
 	if hook.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		hook.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			hook.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		hook.Author = "unknown"
 	}
 	if hook.Pattern != "" {
 		if _, err := regexp.Compile(hook.Pattern); err != nil {
@@ -877,11 +1200,38 @@ func checkTask(c echo.Context, task *Task) (bool, error) {
 	if task.Endpoint == "" {
 		return false, c.JSON(http.StatusBadRequest, "Endpoint must not be empty")
 	}
-	if email, err := jwtEmail(c); err == nil {
-		task.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
+		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			task.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use the default "unknown" value
+		task.Author = "unknown"
 	}
 	if _, err := cron.ParseStandard(task.Spec); err != nil {
 		log.Println(err)
@@ -899,23 +1249,52 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 		log.Println(err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if email, err := jwtEmail(c); err == nil {
-		proxy.Author = email
-	} else {
-		log.Println(err)
+
+	// First check if Cloudflare auth is required
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Println("Error opening config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	if name, err := jwtName(c); err == nil {
-		proxy.Name = name
-	} else {
-		log.Println(err)
+	defer configFile.Close()
+
+	var config struct {
+		Auth struct {
+			RequireCloudflare bool `json:"requireCloudflare"`
+		} `json:"auth"`
+	}
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Println("Error decoding config file:", err)
 		return false, c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	// Set author and name based on Cloudflare requirement
+	if config.Auth.RequireCloudflare {
+		// Only try to get the email and name if Cloudflare auth is required
+		if email, err := jwtEmail(c); err == nil {
+			proxy.Author = email
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+
+		if name, err := jwtName(c); err == nil {
+			proxy.Name = name
+		} else {
+			log.Println(err)
+			return false, c.JSON(http.StatusInternalServerError, err.Error())
+		}
+	} else {
+		// If Cloudflare auth is not required, use default values
+		proxy.Author = "unknown"
+		proxy.Name = "unknown"
 	}
 	return true, nil
 }
 
 func manager() {
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("postgres", getDatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1133,11 +1512,39 @@ func manager() {
 
 	e.GET("/proxy", func(c echo.Context) error {
 		var proxy Proxy
-		name, err := jwtName(c)
+
+		// First check if Cloudflare auth is required
+		configFile, err := os.Open("config.json")
 		if err != nil {
-			log.Println(err)
+			log.Println("Error opening config file:", err)
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+		defer configFile.Close()
+
+		var config struct {
+			Auth struct {
+				RequireCloudflare bool `json:"requireCloudflare"`
+			} `json:"auth"`
+		}
+
+		if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+			log.Println("Error decoding config file:", err)
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+
+		var name string
+		if config.Auth.RequireCloudflare {
+			// Only try to get the name if Cloudflare auth is required
+			name, err = jwtName(c)
+			if err != nil {
+				log.Println(err)
+				return c.JSON(http.StatusInternalServerError, err.Error())
+			}
+		} else {
+			// If Cloudflare auth is not required, use default value
+			name = "unknown"
+		}
+
 		err = bundb.NewSelect().Model((*Proxy)(nil)).Where("name = ?", name).Scan(context.Background(), &proxy)
 		if err != nil {
 			e.Logger.Error(err)
@@ -1204,6 +1611,14 @@ func manager() {
 						log.Printf("%v: %v: %v", name, r, err)
 						continue
 					}
+
+					// Try to authenticate to the relay using NIP-42
+					if !authenticateRelay(context.Background(), relay) {
+						log.Printf("%v: %v: Authentication failed, skipping relay", name, r)
+						relay.Close()
+						continue
+					}
+
 					err = relay.Publish(context.Background(), eev)
 					relay.Close()
 					if err != nil {
@@ -1235,9 +1650,92 @@ func manager() {
 	e.Logger.Fatal(e.Start(":8989"))
 }
 
+// getPrivateKey loads the private key from the environment variables
+func getPrivateKey() (string, error) {
+	// Load .env file if it exists
+	_ = godotenv.Load()
+
+	// Get the private key from environment variables
+	nsecKey := os.Getenv("NOSTR_PRIVATE_KEY")
+	if nsecKey == "" {
+		return "", fmt.Errorf("NOSTR_PRIVATE_KEY environment variable not set")
+	}
+
+	// Decode the nsec key to get the raw private key
+	_, sk, err := nip19.Decode(nsecKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode private key: %w", err)
+	}
+
+	return sk.(string), nil
+}
+
+// authenticateRelay attempts to authenticate to a relay using NIP-42
+// Returns true if authentication was successful or not required, false if it failed
+func authenticateRelay(ctx context.Context, relay *nostr.Relay) bool {
+	log.Printf("Attempting to authenticate to relay %s", relay.URL)
+
+	// Get the private key
+	sk, err := getPrivateKey()
+	if err != nil {
+		log.Printf("Error getting private key for relay %s: %v", relay.URL, err)
+		return false
+	}
+
+	// Get the public key for logging
+	pubKey, _ := nostr.GetPublicKey(sk)
+	log.Printf("Using public key for authentication to relay %s: %s", relay.URL, pubKey)
+
+	// Create a signing function
+	signFunc := func(event *nostr.Event) error {
+		event.PubKey = pubKey
+		event.Sign(sk)
+		return nil
+	}
+
+	// Attempt to authenticate to the relay
+	// The go-nostr library will only perform authentication if the relay
+	// has sent an AUTH challenge message
+	err = relay.Auth(ctx, signFunc)
+	if err != nil {
+		// Log the full error for debugging
+		log.Printf("Authentication error details for relay %s: %v", relay.URL, err)
+
+		// If there's an error, it could be because:
+		// 1. The relay doesn't support NIP-42 (not an error, just no auth needed)
+		// 2. Authentication failed (actual error)
+		if strings.Contains(err.Error(), "no challenge received") {
+			// This means the relay doesn't require authentication
+			log.Printf("Relay %s does not require authentication", relay.URL)
+			return true
+		}
+
+		// Check for other common error messages
+		if strings.Contains(err.Error(), "authentication failed") ||
+			strings.Contains(err.Error(), "unauthorized") ||
+			strings.Contains(err.Error(), "forbidden") {
+			log.Printf("Authentication failed for relay %s: %v", relay.URL, err)
+			return false
+		}
+
+		log.Printf("Error authenticating to relay %s: %v", relay.URL, err)
+		return false
+	}
+
+	// The Auth method returning without error only means the AUTH event was sent successfully,
+	// not that the relay accepted the authentication. The relay may close the connection
+	// if authentication fails, but we can't reliably detect that here.
+	return true
+}
+
 func init() {
 	time.Local = time.FixedZone("Local", 9*60*60)
 	jobs = cron.New(cron.WithLocation(time.Local))
+
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found or could not be loaded: %v", err)
+	}
 }
 
 func main() {
