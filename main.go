@@ -149,6 +149,39 @@ var (
 	reKinds     = regexp.MustCompile(`^\s*\d+(?:\s*,\s*\d+)*\s*$`)
 )
 
+// getDatabaseURL constructs a PostgreSQL connection string from environment variables
+// It first checks for DATABASE_URL for backward compatibility, then falls back to
+// constructing the URL from individual POSTGRES_* variables
+func getDatabaseURL() string {
+	// First check if DATABASE_URL is explicitly set (backward compatibility)
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL != "" {
+		return dbURL
+	}
+
+	// Get essential variables with fallbacks
+	user := getEnvWithDefault("POSTGRES_USER", "postgres")
+	password := getEnvWithDefault("POSTGRES_PASSWORD", "postgres")
+	db := getEnvWithDefault("POSTGRES_DB", "postgres")
+	host := getEnvWithDefault("POSTGRES_HOST", "localhost")
+
+	// Use hardcoded defaults for non-essential parameters
+	port := getEnvWithDefault("POSTGRES_PORT", "5432")
+	sslMode := getEnvWithDefault("POSTGRES_SSLMODE", "disable")
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		user, password, host, port, db, sslMode)
+}
+
+// getEnvWithDefault returns the value of the environment variable or the default value if not set
+func getEnvWithDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
 func loadFeedRelaysFromConfig() []FeedRelay {
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
@@ -728,7 +761,7 @@ func createRandomStringFunction(db *sql.DB) error {
 func server(from *time.Time) {
 	enc := json.NewEncoder(os.Stdout)
 
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("postgres", getDatabaseURL())
 	if err != nil {
 		log.Println(err)
 		return
@@ -1261,7 +1294,7 @@ func checkProxy(c echo.Context, proxy *Proxy) (bool, error) {
 }
 
 func manager() {
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("postgres", getDatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -67,9 +67,17 @@ Configuration is done through a `config.json` file:
 
 ## Environment Variables
 
-- `POSTGRES_USER`: PostgreSQL username
+### Database Configuration
+
+- `POSTGRES_USER`: PostgreSQL username (default: "postgres")
 - `POSTGRES_PASSWORD`: PostgreSQL password
-- `POSTGRES_DB`: PostgreSQL database name
+- `POSTGRES_DB`: PostgreSQL database name (default: "postgres")
+- `POSTGRES_HOST`: PostgreSQL host
+  - Use "postgres" for Docker deployment
+  - Use "localhost" (or your database server address) for non-Docker deployment
+
+### Nostr Configuration
+
 - `NOSTR_PRIVATE_KEY`: Your Nostr private key in nsec format used for NIP-42 relay authentication
 
 ## Usage
