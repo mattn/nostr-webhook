@@ -384,12 +384,26 @@ func reloadTasks(bundb *bun.DB) {
 				log.Printf("%v: Invalid status code: %v", ct.Name, resp.StatusCode)
 				return
 			}
-			var eev nostr.Event
-			err = json.NewDecoder(resp.Body).Decode(&eev)
+			b, err := io.ReadAll(resp.Body)
 			if err != nil {
 				log.Printf("%v: %v", ct.Name, err)
 				return
 			}
+
+			var eev nostr.Event
+			var eevs []nostr.Event
+
+			err = json.NewDecoder(bytes.NewReader(b)).Decode(&eev)
+			if err != nil {
+				err = json.NewDecoder(bytes.NewReader(b)).Decode(&eevs)
+				if err != nil {
+					log.Printf("%v: %v", ct.Name, err)
+					return
+				}
+			} else {
+				eevs = []nostr.Event{eev}
+			}
+
 			relayMu.Lock()
 			defer relayMu.Unlock()
 			for _, r := range postRelays {
@@ -402,12 +416,14 @@ func reloadTasks(bundb *bun.DB) {
 						log.Printf("%v: %v: %v", ct.Name, r, err)
 						continue
 					}
-					err = relay.Publish(context.Background(), eev)
-					relay.Close()
-					if err != nil {
-						log.Printf("%v: %v: %v", ct.Name, r, err)
-						continue
+					for _, vv := range eevs {
+						err = relay.Publish(context.Background(), vv)
+						if err != nil {
+							log.Printf("%v: %v: %v", ct.Name, r, err)
+							continue
+						}
 					}
+					relay.Close()
 					break
 				}
 			}
