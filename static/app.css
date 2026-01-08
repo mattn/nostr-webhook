@@ -133,7 +133,7 @@ table tr {
 }
 
 table tr:hover {
-  background-color: #f7fafc;
+  background-color: #edf2f7;
 }
 
 table tr:last-child {
@@ -149,8 +149,12 @@ table td {
 }
 
 table tr.disabled {
-  background-color: #f7fafc;
+  background-color: #e2e8f0;
   color: #a0aec0;
+}
+
+table tr.disabled:hover {
+  background-color: #cbd5e0;
 }
 
 .dialog-screen {
@@ -255,6 +259,14 @@ p.message-text {
   font-weight: 600;
   font-size: 18px;
   margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .menu span {
@@ -286,6 +298,7 @@ p.message-text {
 .button-left {
   margin: 0;
   text-align: left;
+  float: left;
 }
 
 .button-right {
