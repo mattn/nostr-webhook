@@ -1,61 +1,156 @@
-body {
-  font-family: sans-serif;
-  font-size: 15px;
-  border: 0;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-form input {
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  border: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  padding: 40px 20px;
+}
+
+h3 a {
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+h3 a:hover {
+  opacity: 0.8;
+}
+
+body > table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+body > button {
+  display: inline-block;
+  margin-top: 20px;
+}
+
+form input, form textarea {
   font-size: 85%;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f7fafc;
+  transition: all 0.3s ease;
+}
+
+form input:focus, form textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: white;
 }
 
 button {
-  background-color: #1FADC5;
-  border: 1px solid rgba(0,0,0,.2);
-  font-size: 75%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  font-size: 85%;
   color: #fff;
-  padding: .4em 1.2em;
-  border-radius: 2em;
+  padding: 10px 24px;
+  border-radius: 8px;
   cursor: pointer;
-  margin: 0 .23em;
+  margin: 0 0.23em;
   outline: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+  transform: translateY(0);
 }
 
 .disabled {
-  background-color: #ccc;
+  background: #a0aec0;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.disabled:hover {
+  transform: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.disabled:active {
+  transform: none;
 }
 
 label {
   cursor: pointer;
+  display: block;
+  margin-bottom: 8px;
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .input-name, .input-description, .input-kinds, .input-mention_to, .input-mention_from, .input-pattern, .input-endpoint, .input-spec {
-  width: 500px;
-  border-radius: 0.2em;
+  width: 100%;
+  max-width: 500px;
+  border-radius: 8px;
 }
 
-table{
+table {
   border-collapse: collapse;
   border-spacing: 0;
   width: 100%;
 }
 
-table tr{
-  border-bottom: solid 1px #eee;
+table thead tr {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+table th {
+  padding: 18px 12px;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: none;
+}
+
+table tr {
+  border-bottom: 1px solid #edf2f7;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-table tr:hover{
-  background-color: #d4f0fd;
+table tr:hover {
+  background-color: #f7fafc;
 }
 
-table th, table td{
-  /*text-align: center;*/
-  padding: 15px 0;
+table tr:last-child {
+  border-bottom: none;
+}
+
+table td {
+  padding: 16px 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #2d3748;
+}
+
+table tr.disabled {
+  background-color: #f7fafc;
+  color: #a0aec0;
 }
 
 .dialog-screen {
@@ -65,15 +160,18 @@ table th, table td{
   bottom: 0;
   left: 0;
   z-index: 99999997;
-  background-color: rgba(0,0,0,.2);
+  background-color: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
 }
 
 .dialog {
-  width: 500px;
-  margin: 10px auto;
+  width: 90%;
+  max-width: 500px;
+  margin: 50px auto;
   background-color: white;
-  padding: 20px;
-  border-radius: 0.5em;
+  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
 .message-screen {
@@ -83,7 +181,8 @@ table th, table td{
   bottom: 0;
   left: 0;
   z-index: 99999998;
-  background-color: rgba(0,0,0,.2);
+  background-color: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
 }
 
 .loading-screen {
@@ -93,62 +192,120 @@ table th, table td{
   bottom: 0;
   left: 0;
   z-index: 99999999;
-  background-color: rgba(0,0,0,.2);
+  background-color: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
 }
 
-.message, .confirm, .loading {
-  width: 300px;
+.message, .confirm {
+  width: 90%;
+  max-width: 300px;
   margin: 100px auto;
   background-color: white;
-  padding: 20px;
-  border-radius: 0.5em;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  text-align: center;
 }
 
 .loading {
-  width: 300px;
+  width: 90%;
+  max-width: 300px;
   margin: 100px auto;
   background-color: white;
-  padding: 20px;
-  border-radius: 0.5em;
-  background-color: rgba(255,255,255,.6);
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  text-align: center;
 }
 
 p.message-text {
   text-align: center;
+  color: #2d3748;
+  font-weight: 500;
+  font-size: 16px;
 }
 
 .menu {
-  width: 80%;
+  width: 90%;
+  max-width: 800px;
   background-color: white;
+  padding: 40px;
+  margin: 20px auto;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+}
+
+.menu p {
+  margin: 16px 0;
   padding: 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.menu p:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.menu a {
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 18px;
+  margin-right: 10px;
+}
+
+.menu span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
 }
 
 .description {
-  margin: 0vh auto 0;
-  padding: 15px 30px;
+  margin: 40px auto 0;
+  padding: 20px 30px;
   text-align: center;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+  max-width: 800px;
+}
+
+.description img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
 }
 
 .button-center {
-  margin: 0px;
+  margin: 0;
   text-align: center;
 }
 
 .button-left {
-  margin: 0px;
+  margin: 0;
   text-align: left;
-  float: left;
 }
 
 .button-right {
-  margin: 0px;
+  margin: 0;
   text-align: right;
 }
 
 .secret {
-  color: #444;
+  color: #718096;
+  background-color: #edf2f7;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 14px;
 }
 
 .icon {
-  width: 30px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  object-fit: cover;
 }
