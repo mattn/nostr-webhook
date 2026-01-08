@@ -25,7 +25,7 @@ h3 a:hover {
 }
 
 body > table {
-  background: transparent;
+  background: white;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.1);
   overflow: hidden;
@@ -127,17 +127,13 @@ table th {
 }
 
 table tr {
-  border-bottom: 1px solid rgba(255,255,255,0.3);
+  border-bottom: 1px solid #edf2f7;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-table tr:not(.disabled) {
-  background-color: rgba(102, 126, 234, 0.3);
-}
-
 table tr:not(.disabled):hover {
-  background-color: white;
+  background-color: #f7fafc;
 }
 
 table tr:last-child {
@@ -149,20 +145,16 @@ table td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: white;
-}
-
-table tr:hover td {
   color: #2d3748;
 }
 
 table tr.disabled {
-  background-color: rgba(102, 126, 234, 0.15);
-  color: rgba(255, 255, 255, 0.7);
+  background-color: #f7fafc;
+  color: #a0aec0;
 }
 
 table tr.disabled:hover {
-  background-color: rgba(102, 126, 234, 0.4);
+  background-color: #edf2f7;
 }
 
 .dialog-screen {
