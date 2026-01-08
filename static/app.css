@@ -24,13 +24,6 @@ h3 a:hover {
   opacity: 0.8;
 }
 
-body > table {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
 body > button {
   display: inline-block;
   margin-top: 20px;
@@ -110,6 +103,10 @@ table {
   border-collapse: collapse;
   border-spacing: 0;
   width: 100%;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
 table thead tr {
@@ -157,16 +154,19 @@ table tr.disabled:hover {
   background-color: #edf2f7;
 }
 
-.dialog-screen {
+.dialog-screen, .message-screen, .loading-screen {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 99999997;
   background-color: rgba(0,0,0,0.5);
   backdrop-filter: blur(4px);
 }
+
+.dialog-screen { z-index: 99999997; }
+.message-screen { z-index: 99999998; }
+.loading-screen { z-index: 99999999; }
 
 .dialog {
   width: 90%;
@@ -178,40 +178,7 @@ table tr.disabled:hover {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
-.message-screen {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 99999998;
-  background-color: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
-}
-
-.loading-screen {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 99999999;
-  background-color: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
-}
-
-.message, .confirm {
-  width: 90%;
-  max-width: 300px;
-  margin: 100px auto;
-  background-color: white;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-
-.loading {
+.message, .confirm, .loading {
   width: 90%;
   max-width: 300px;
   margin: 100px auto;
@@ -290,21 +257,13 @@ p.message-text {
   border-radius: 8px;
 }
 
-.button-center {
+.button-center, .button-left, .button-right {
   margin: 0;
-  text-align: center;
 }
 
-.button-left {
-  margin: 0;
-  text-align: left;
-  float: left;
-}
-
-.button-right {
-  margin: 0;
-  text-align: right;
-}
+.button-center { text-align: center; }
+.button-left { text-align: left; float: left; }
+.button-right { text-align: right; }
 
 .secret {
   color: #718096;
