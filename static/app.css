@@ -146,8 +146,8 @@ table td {
 }
 
 table tr.disabled {
-  background-color: #f7fafc;
-  color: #a0aec0;
+  background-color: #e2e8f0;
+  color: #718096;
 }
 
 table tr.disabled:hover {
