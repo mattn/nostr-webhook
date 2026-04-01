@@ -1226,6 +1226,7 @@ func manager() {
 				}
 			}()
 		}
+		wg.Wait()
 		return c.JSON(http.StatusCreated, "")
 	})
 
