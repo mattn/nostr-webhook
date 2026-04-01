@@ -615,10 +615,6 @@ func server(from *time.Time) {
 	defer cancel()
 
 	pool := nostr.NewSimplePool(ctx)
-	if err != nil {
-		log.Println(err)
-		return
-	}
 
 	log.Println("Connected to relay")
 
