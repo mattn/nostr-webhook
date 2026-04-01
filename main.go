@@ -657,6 +657,7 @@ func server(from *time.Time) {
 					}
 				*/
 				doHookEntries(ev)
+				doWatchEntries(ev)
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
 				}
