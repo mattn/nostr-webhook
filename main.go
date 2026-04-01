@@ -648,16 +648,12 @@ func server(from *time.Time) {
 					break events_loop
 				}
 				enc.Encode(ev)
-				/*
-					switch ev.Kind {
-					case nostr.KindProfileMetadata:
-						doWatchEntries(ev)
-					case nostr.KindTextNote, nostr.KindChannelMessage:
-						doHookEntries(ev)
-					}
-				*/
-				doHookEntries(ev)
-				doWatchEntries(ev)
+				switch ev.Kind {
+				case nostr.KindProfileMetadata:
+					doWatchEntries(ev)
+				case nostr.KindTextNote, nostr.KindChannelMessage:
+					doHookEntries(ev)
+				}
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
 				}
