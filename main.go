@@ -709,7 +709,7 @@ loop:
 func jwtName(c echo.Context) (string, error) {
 	cookie, err := c.Request().Cookie("CF_Authorization")
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	claims := jwt.MapClaims{}
