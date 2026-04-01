@@ -648,11 +648,9 @@ func server(from *time.Time) {
 					break events_loop
 				}
 				enc.Encode(ev)
-				switch ev.Kind {
-				case nostr.KindProfileMetadata:
+				doHookEntries(ev)
+				if ev.Kind == nostr.KindProfileMetadata {
 					doWatchEntries(ev)
-				case nostr.KindTextNote, nostr.KindChannelMessage:
-					doHookEntries(ev)
 				}
 				if ev.CreatedAt.Time().After(*from) {
 					*from = ev.CreatedAt.Time()
