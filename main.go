@@ -1179,7 +1179,6 @@ func manager() {
 		}
 
 		proxiesMu.Lock()
-		defer proxiesMu.Unlock()
 		ok = false
 		for _, p := range proxies {
 			if p.Name == name && p.Password == password && p.Enabled {
@@ -1187,6 +1186,7 @@ func manager() {
 				break
 			}
 		}
+		proxiesMu.Unlock()
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
 		}
