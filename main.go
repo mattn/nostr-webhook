@@ -639,6 +639,8 @@ func server(from *time.Time) {
 		defer wg.Done()
 
 		retry := 0
+		healthTimer := time.NewTimer(10 * time.Second)
+		defer healthTimer.Stop()
 		log.Println("Start")
 	events_loop:
 		for {
@@ -656,11 +658,18 @@ func server(from *time.Time) {
 					*from = ev.CreatedAt.Time()
 				}
 				retry = 0
+				if !healthTimer.Stop() {
+					select {
+					case <-healthTimer.C:
+					default:
+					}
+				}
+				healthTimer.Reset(10 * time.Second)
 			case <-hbtimer.C:
 				if url := os.Getenv("HEARTBEAT_URL"); url != "" {
 					go heartbeatPush(url)
 				}
-			case <-time.After(10 * time.Second):
+			case <-healthTimer.C:
 				alive := pool.Relays.Size()
 				pool.Relays.Range(func(key string, relay *nostr.Relay) bool {
 					if relay.ConnectionError != nil {
@@ -677,6 +686,7 @@ func server(from *time.Time) {
 				if retry > 60 {
 					break events_loop
 				}
+				healthTimer.Reset(10 * time.Second)
 			}
 		}
 		log.Println("Finish")
