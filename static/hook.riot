@@ -1,6 +1,7 @@
 <hook>
   <h3><a href="/">{ props.title }</a></h3>
 
+  <input type="search" class="search" placeholder="Search..." value={ state.query } oninput={ onSearch } />
   <table>
     <tr>
       <th>-</th>
@@ -10,7 +11,7 @@
       <th>Endpoint</th>
       <th>-</th>
     </tr>
-    <tr each={ item in state.items } class={ item.enabled ? null : 'disabled' }>
+    <tr each={ item in filtered() } class={ item.enabled ? null : 'disabled' }>
       <td style='max-width: 40px'><img class="icon" src={ icon(item) }/></td>
       <td>{ item.name }</td>
       <td style='max-width: 100px'>{ item.mention_to }</td>
@@ -27,6 +28,7 @@
       onBeforeMount(props, state) {
         this.state = {
           items: props.items,
+          query: '',
         }
         this.reload();
       },
@@ -37,6 +39,18 @@
           riot.unmount('loading', true)
         }
         reloader();
+      },
+      onSearch(e) {
+        this.update({query: e.target.value})
+      },
+      filtered() {
+        const q = (this.state.query || '').toLowerCase()
+        if (!q) return this.state.items
+        return (this.state.items || []).filter(item =>
+          ['name', 'mention_to', 'pattern', 'endpoint'].some(k =>
+            (item[k] || '').toString().toLowerCase().includes(q)
+          )
+        )
       },
       create() {
         riot.mount('hook-modal', {item: {}, create: true, parent: this})
