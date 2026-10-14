@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -150,10 +151,14 @@ var (
 	watches   = []Watch{}
 	hooksMu   sync.Mutex
 	hooks     = []Hook{}
-	tasksMu   sync.Mutex
-	tasks     = []Task{}
-	proxiesMu sync.Mutex
-	proxies   = []Proxy{}
+	// resubscribe is signaled when the set of kinds used by hooks changes so
+	// that server() re-subscribes with an updated filter.
+	resubscribe = make(chan struct{}, 1)
+	subKinds    []int
+	tasksMu     sync.Mutex
+	tasks       = []Task{}
+	proxiesMu   sync.Mutex
+	proxies     = []Proxy{}
 
 	jobs *cron.Cron
 
@@ -528,6 +533,27 @@ func reloadHooks(bundb *bun.DB) {
 	defer hooksMu.Unlock()
 	hooks = ee
 	log.Printf("Reloaded %d hooks", len(ee))
+
+	if !slices.Equal(subKinds, hookKindsLocked()) {
+		select {
+		case resubscribe <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// hookKindsLocked returns the sorted set of kinds any enabled hook is
+// interested in, plus kind 0 for watches. hooksMu must be held.
+func hookKindsLocked() []int {
+	kinds := []int{nostr.KindProfileMetadata}
+	for _, entry := range hooks {
+		if !entry.Enabled {
+			continue
+		}
+		kinds = append(kinds, entry.nums...)
+	}
+	slices.Sort(kinds)
+	return slices.Compact(kinds)
 }
 
 func reloadProxies(bundb *bun.DB) {
@@ -621,9 +647,16 @@ func server(from *time.Time) {
 	events := make(chan *nostr.Event, 100)
 	defer close(events)
 
+	// Subscribe only to kinds that hooks/watches use; relays such as yabu.me
+	// push hundreds of ephemeral events per second otherwise.
+	hooksMu.Lock()
+	subKinds = hookKindsLocked()
+	hooksMu.Unlock()
+	log.Printf("Subscribing kinds %v", subKinds)
+
 	timestamp := nostr.Timestamp(from.Unix())
 	filters := []nostr.Filter{{
-		//Kinds: []int{nostr.KindTextNote, nostr.KindChannelMessage, nostr.KindProfileMetadata},
+		Kinds: subKinds,
 		Since: &timestamp,
 	}}
 	sub := pool.SubMany(ctx, feedRelayNames(), filters)
@@ -702,6 +735,9 @@ loop:
 				break loop
 			}
 			events <- ev.Event
+		case <-resubscribe:
+			log.Println("Hook kinds changed, re-subscribing")
+			break loop
 		case <-pool.Context.Done():
 			break loop
 		}
