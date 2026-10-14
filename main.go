@@ -645,7 +645,6 @@ func server(from *time.Time) {
 	log.Println("Connected to relay")
 
 	events := make(chan *nostr.Event, 100)
-	defer close(events)
 
 	// Subscribe only to kinds that hooks/watches use; relays such as yabu.me
 	// push hundreds of ephemeral events per second otherwise.
@@ -734,14 +733,29 @@ loop:
 			if !ok || ev.Event == nil {
 				break loop
 			}
-			events <- ev.Event
+			select {
+			case events <- ev.Event:
+			case <-pool.Context.Done():
+				break loop
+			}
 		case <-resubscribe:
+			// reloadHooks may signal before subKinds is set at startup, so
+			// re-subscribe only when the kinds really differ.
+			hooksMu.Lock()
+			changed := !slices.Equal(subKinds, hookKindsLocked())
+			hooksMu.Unlock()
+			if !changed {
+				continue
+			}
 			log.Println("Hook kinds changed, re-subscribing")
 			break loop
 		case <-pool.Context.Done():
 			break loop
 		}
 	}
+	// Closing events makes the worker goroutine exit right away instead of
+	// waiting for the health check to give up.
+	close(events)
 	wg.Wait()
 
 	log.Println("Stopped")
