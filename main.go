@@ -251,6 +251,16 @@ func doHttpReqOnce(req *http.Request, name string) bool {
 
 func doHttpReq(req *http.Request, name string) {
 	for i := 0; i < 3; i++ {
+		// The previous attempt consumed the body, so rewind it before
+		// retrying; otherwise the retry is sent with an empty body.
+		if i > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				log.Printf("%v: %v", name, err)
+				return
+			}
+			req.Body = body
+		}
 		if doHttpReqOnce(req, name) {
 			return
 		}
